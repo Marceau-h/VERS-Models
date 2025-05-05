@@ -1,0 +1,29 @@
+# Environment folders
+.idea/
+.venv/
+venv/
+
+# Compiled sources
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Input files
+*.txt
+
+# Models and languages
+langs/**/
+models/**/
+*.state
+*.npy
+*.pth
+
+# Results and parameters
+eval/**/
+errors/**/
+*.csv
+*.json
+*.ndjson
+*.parquet
+
