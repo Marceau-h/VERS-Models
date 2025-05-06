@@ -27,3 +27,5 @@ errors/**/
 *.ndjson
 *.parquet
 
+!/configs/*.json
+
