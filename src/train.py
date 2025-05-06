@@ -1,87 +1,11 @@
-from pathlib import Path
 from typing import Optional
 
 import torch
-from torch import optim, nn
+from torch import nn
 from torch.utils.data import DataLoader
-from tqdm.auto import trange
 
 from src import BaseModel
 from src.Language import read_data
-from src.models import models
-
-
-# def train(
-#         model,
-#         dataloader,
-#         optimizer,
-#         criterion,
-#         device,
-#         num_epochs=10,
-#         teacher_forcing_ratio=0.5,
-#         eval_every=None,
-#         eval_fn=None,
-#         eval_args=None,
-#         from_epoch=0,
-# ):
-#     scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None
-#     model.train()
-#
-#     losses = []
-#     evals = []
-#
-#     pbar = trange(1 + from_epoch, num_epochs + 1 + from_epoch, desc="Epochs", unit="epoch")
-#     for epoch in pbar:
-#         epoch_loss = 0
-#
-#         for src, trg in dataloader:
-#             src, trg = src.to(device), trg.to(device)
-#
-#             optimizer.zero_grad()
-#             if scaler is not None:
-#                 with torch.amp.autocast("cuda"):
-#                     output = model(src, trg, teacher_forcing_ratio)
-#
-#                     # Reshape for the loss function
-#                     output_dim = output.shape[-1]
-#                     output = output[:, 1:].reshape(-1, output_dim)
-#                     trg = trg[:, 1:].reshape(-1)
-#
-#                     loss = criterion(output, trg)
-#                 scaler.scale(loss).backward()
-#                 scaler.step(optimizer)
-#                 scaler.update()
-#             else:
-#                 output = model(src, trg, teacher_forcing_ratio)
-#
-#                 # Reshape for the loss function
-#                 output_dim = output.shape[-1]
-#                 output = output[:, 1:].reshape(-1, output_dim)
-#                 trg = trg[:, 1:].reshape(-1)
-#
-#                 loss = criterion(output, trg)
-#                 loss.backward()
-#                 optimizer.step()
-#
-#             epoch_loss += loss.item()
-#
-#         # print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss/len(dataloader):.4f}")
-#         pbar.set_postfix(loss=epoch_loss / len(dataloader))
-#
-#         if eval_every and eval_fn:
-#             if epoch % eval_every == 0:
-#                 losses.append(epoch_loss / len(dataloader))
-#                 evals.append(eval_fn(**eval_args))
-#                 model.train()
-#
-#     if not eval_every:
-#         losses.append(epoch_loss / len(dataloader))
-#     elif epoch % eval_every != 0:
-#         losses.append(epoch_loss / len(dataloader))
-#         if eval_fn:
-#             evals.append(eval_fn(**eval_args))
-#
-#     return model, losses, evals
 
 
 def expand_model_vocabulary(model, new_src_vocab_size, new_trg_vocab_size, device=None):
@@ -148,10 +72,10 @@ def auto_train(
     model_args["input_size"] = lang_input.n_tokens
     model_args["output_size"] = lang_output.n_tokens
 
+    print(f"Model args: {model_args}")
     model = model_class(**model_args).to(device)
 
     # Training setup
-
     dataset = torch.utils.data.TensorDataset(torch.tensor(X_train), torch.tensor(y_train))
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
