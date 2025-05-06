@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 import torch
 
 from src.Language import Language, read_data
-from src.eval import random_predict, do_one_sent, do_full_eval
+from src.eval import random_predict, do_full_eval
 from src.models import models
 from src.train import auto_train
 
@@ -28,12 +28,6 @@ def main(
 
         datetime_str: str = None,
         default_to_latest: bool = True,
-
-        # embed_size: int = 512,
-        # hidden_size: int = 512,
-        # num_layers: int = 1,
-        # lr: float = 1e-4,
-        # teacher_forcing_ratio: float = 0.5,
 ):
     assert lang_name, "lang_name must be provided"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -73,6 +67,8 @@ def main(
             model,
             lang_input,
             lang_output,
+            losses,
+            evals,
             (X_train, X_test, y_train, y_test),
         ) = auto_train(
             model_class=model_class,
@@ -219,6 +215,7 @@ if __name__ == '__main__':
     parsed, unknown = parser.parse_known_args()
     print("Parsed arguments:", parsed)
     print("Unknown arguments:", unknown)
+    start_time = ns()
 
     model_args = {}
     for arg in unknown:
@@ -255,4 +252,4 @@ if __name__ == '__main__':
         datetime_str=parsed.datetime_str,
         default_to_latest=parsed.default_to_latest
     )
-    # print(f"Done ! Took {pretty_time(ns() - start_time)}")
+    print(f"Done ! Took {pretty_time(ns() - start_time)}")
