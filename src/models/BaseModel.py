@@ -10,7 +10,6 @@ from torch import nn, Tensor
 from torch.cuda import is_available
 from torch.optim import Optimizer
 
-
 class InvalidConfigError(Exception):
     def __init__(self, message: str):
         """
@@ -31,12 +30,13 @@ class BaseModel(ABC, nn.Module):
     LOGS_ROOT_DIR_NAME: str = "logs"
     CONFIGS_ROOT_DIR_NAME: str = "configs"
     BANNED_KEYS: Set[str] = {
-        "pretty_name",
+        "cls_name",
         "device",
-        "lang",
+        "lang_name",
         "class_name",
     }
     MANDATORY_KEYS: Set[str] = set()
+    ALLOWED_KEYS: Set[str]  # abstract
 
     @classmethod
     def get_root_dir(cls) -> tuple[Path, int]:
@@ -50,41 +50,76 @@ class BaseModel(ABC, nn.Module):
             cwd = cwd.parent
         return cwd, relative_to_root
 
+    @classmethod
+    def solve_paths(cls):
+        root_dir, relative_to_root = cls.get_root_dir()
+        lang_root = root_dir / cls.LANGS_ROOT_DIR_NAME
+        eval_root = root_dir / cls.EVALS_ROOT_DIR_NAME
+        errors_root = root_dir / cls.ERRORS_ROOT_DIR_NAME
+        logs_root = root_dir / cls.LOGS_ROOT_DIR_NAME
+        checkpoints_root = root_dir / cls.CHECKPOINTS_ROOT_DIR_NAME
+        configs_root = root_dir / cls.CONFIGS_ROOT_DIR_NAME
+        model_root = root_dir / cls.MODEL_ROOT_DIR_NAME
+
+        return (
+            root_dir,
+            relative_to_root,
+            lang_root,
+            eval_root,
+            errors_root,
+            logs_root,
+            checkpoints_root,
+            configs_root,
+            model_root
+        )
+
+
+
     def set_paths(self) -> None:
         """
         Uses get_root_dir and the class variables to set the paths for the model, and other directories.
         """
         clone_repo = "does not exist, have you cloned the repository correctly ?"
-        twice = "already exists, you've probably executed the script twice withou realizing it."
+        twice = "already exists, you've probably executed the script twice without realizing it."
 
-        self.root_dir, self.relative_to_root = self.get_root_dir()
+        (
+            self.root_dir,
+            self.relative_to_root,
+            self.lang_root,
+            self.eval_root,
+            self.errors_root,
+            self.logs_root,
+            self.checkpoints_root,
+            self.configs_root,
+            self.model_root
+        ) = self.solve_paths()
 
         # This first to exit if lang_dir does not exist without creating the other directories
-        self.lang_dir = self.root_dir / Path(self.LANGS_ROOT_DIR_NAME) / self.lang
+        self.lang_dir = self.lang_root / self.lang
         assert self.lang_dir.exists(), f"Language directory {self.lang_dir} does not exist, if you are using a new language, please create it first with the ``--make_lang`` argument."
 
         # Dirs that sould always exist, crash if not
-        self.eval_dir = self.root_dir / Path(self.EVALS_ROOT_DIR_NAME)
+        self.eval_dir = self.eval_root
         assert self.eval_dir.exists(), f"Eval directory {self.eval_dir} {clone_repo}"
-        self.errors_dir = self.root_dir / Path(self.ERRORS_ROOT_DIR_NAME)
+        self.eval_path = self.eval_dir / f"{self.cls_name}_{self.start_datetime_str}.json"
+        self.errors_dir = self.errors_root
         assert self.errors_dir.exists(), f"Errors directory {self.errors_dir} {clone_repo}"
-        self.logs_dir = self.root_dir / Path(self.LOGS_ROOT_DIR_NAME)
+        self.logs_dir = self.logs_root
         assert self.logs_dir.exists(), f"Logs directory {self.logs_dir} {clone_repo}"
-        self.configs_dir = self.root_dir / Path(self.CONFIGS_ROOT_DIR_NAME)
+        self.configs_dir = self.configs_root
         assert self.configs_dir.exists(), f"Configs directory {self.configs_dir} {clone_repo}"
 
         # Config file, should always exist
-        self.config_file = self.configs_dir / Path(f"{self.pretty_name}.json")
+        self.config_file = self.configs_dir / f"{self.cls_name}.json"
         assert self.config_file.exists(), f"Config file {self.config_file} {clone_repo}"
 
         # Dirs to create
-        self.model_dir = self.root_dir / Path(self.MODEL_ROOT_DIR_NAME) / self.pretty_name / self.start_datetime_str
+        self.model_dir = self.model_root / self.cls_name / self.start_datetime_str
         try:
             self.model_dir.mkdir(parents=True)
         except FileExistsError:
             raise FileExistsError(f"Model directory {self.model_dir} {twice}")
-        self.checkpoints_dir = self.root_dir / Path(
-            self.CHECKPOINTS_ROOT_DIR_NAME) / self.pretty_name / self.start_datetime_str
+        self.checkpoints_dir = self.checkpoints_root / self.cls_name / self.start_datetime_str
         try:
             self.checkpoints_dir.mkdir(parents=True)
         except FileExistsError:
@@ -142,6 +177,13 @@ class BaseModel(ABC, nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
 
+        try:
+            0 in self.__class__.ALLOWED_KEYS  # Check if the class has mandatory keys or is unset
+        except AttributeError:
+            pass
+            # raise NotImplementedError(
+            #     f"{self.__class__.__name__} does not have any mandatory keys, please set them in the class.")
+
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -152,14 +194,15 @@ class BaseModel(ABC, nn.Module):
         self.start_datetime_str: str = self.start_datetime.strftime("%Y-%m-%d_%H-%M-%S")
 
         self.params: dict = kwargs
-        self.pretty_name = kwargs.get("pretty_name", self.__class__.__name__)
+        self.cls_name = self.__class__.__name__
         self.device: torch.device = torch.device(kwargs.get("device", "cuda" if is_available() else "cpu"))
-        self.lang = kwargs["lang"]  # This should be set as a parameter rather than in the config file
+        self.lang = kwargs["lang_name"]  # This should be set as a parameter rather than in the config file
 
         self.root_dir: Path = None
         self.relative_to_root: int = None
         self.lang_dir: Path = None
         self.eval_dir: Path = None
+        self.eval_path: Path = None
         self.errors_dir: Path = None
         self.logs_dir: Path = None
         self.configs_dir: Path = None
@@ -169,9 +212,9 @@ class BaseModel(ABC, nn.Module):
         self.set_paths()
 
         # Read the config file and update the params
-        self.read_config(**kwargs)
+        self.params = self.read_config(**kwargs)
 
-    def save_model(self) -> tuple[Path, Path]:
+    def save(self) -> tuple[Path, Path]:
         """
         Save the model (and parameters) to its directory.
         """
@@ -194,11 +237,10 @@ class BaseModel(ABC, nn.Module):
         return self.model_dir / Path("model.pth"), self.model_dir / Path("params.json")
 
     @classmethod
-    def load_model(
+    def load(
             cls,
             /,
             *args,
-            pretty_name: Optional[str] = None,
             datetime_str: Optional[str] = None,
             default_to_latest: bool = True,
             device: Optional[Union[str, torch.device]] = None,
@@ -206,7 +248,6 @@ class BaseModel(ABC, nn.Module):
     ) -> tuple[type["BaseModel"], Any, Path]:
         """
         Load the model from the given path.
-        :param pretty_name: The name of the model to load. If None, use the class name.
         :param datetime_str: The datetime string to load the model from.
         :param default_to_latest: If True, load the latest model if datetime_str is not provided and multiple models exist.
         :param device: The device to load the model on. If None, tries to use cuda.
@@ -215,10 +256,7 @@ class BaseModel(ABC, nn.Module):
         if device is None:
             device = "cuda" if is_available() else "cpu"
 
-        if pretty_name is None:
-            pretty_name = cls.__name__
-
-        model_root_dir = cls.get_root_dir()[0] / Path(cls.MODEL_ROOT_DIR_NAME) / pretty_name
+        model_root_dir = cls.get_root_dir()[0] / Path(cls.MODEL_ROOT_DIR_NAME) / cls.__name__
 
         if not model_root_dir.exists():
             raise FileNotFoundError(f"Model directory {model_root_dir} does not exist, no model to load.")
@@ -230,17 +268,20 @@ class BaseModel(ABC, nn.Module):
                     raise FileNotFoundError(f"Model directory {model_root_dir} is empty, no model to load.")
                 model_dir = lst_models[-1]
             else:
-                raise FileNotFoundError(f"`default_to_latest` was manually set to False, please specify a datetime string if you want to load a specific model or leave the `default_to_latest` to True.")
+                raise FileNotFoundError(
+                    f"`default_to_latest` was manually set to False, please specify a datetime string if you want to load a specific model or leave the `default_to_latest` to True.")
         else:
             model_dir = model_root_dir / Path(datetime_str)
             if not model_dir.exists():
-                raise FileNotFoundError(f"Model directory {model_dir} does not exist, have you specified the correct datetime string ?")
+                raise FileNotFoundError(
+                    f"Model directory {model_dir} does not exist, have you specified the correct datetime string ?")
 
         with open(model_dir / Path("params.json"), "r", encoding="utf-8") as f:
             params = json.load(f)
 
         if params["class_name"] != cls.__name__:
-            raise InvalidConfigError(f"Model {params['class_name']} is not compatible with the current class {cls.__name__}, please load the model using the correct class.")
+            raise InvalidConfigError(
+                f"Model {params['class_name']} is not compatible with the current class {cls.__name__}, please load the model using the correct class.")
 
         params.device = device
 
@@ -256,5 +297,24 @@ class BaseModel(ABC, nn.Module):
 
         return model, params, model_dir
 
+    @abstractmethod
+    def forward(self, src, trg) -> Tensor:
+        raise NotImplementedError("Forward method not implemented")
 
+    @abstractmethod
+    def predict(self, src, lang_output) -> None:
+        raise NotImplementedError("Predict method not implemented")
 
+    @abstractmethod
+    def do_train(
+            self,
+            device,
+            dataloader,
+            num_epochs=10,
+            eval_every=None,
+            eval_fn=None,
+            eval_args=None,
+            from_epoch=0,
+            **kwargs,
+    ):
+        raise NotImplementedError("Train method not implemented")

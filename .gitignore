@@ -20,7 +20,7 @@ models/**/
 *.pth
 
 # Results and parameters
-eval/**/
+evals/**/
 errors/**/
 *.csv
 *.json
