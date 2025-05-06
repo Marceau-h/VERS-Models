@@ -10,6 +10,7 @@ from torch import nn, Tensor
 from torch.cuda import is_available
 from torch.optim import Optimizer
 
+
 class InvalidConfigError(Exception):
     def __init__(self, message: str):
         """
@@ -170,6 +171,8 @@ class BaseModel(ABC, nn.Module):
             return obj.tolist()
         elif isinstance(obj, Tensor):
             return obj.tolist()
+        elif isinstance(obj, torch.device):
+            return None
         else:
             raise TypeError(f'Object of type {obj.__class__.__name__} is not JSON serializable')
 
