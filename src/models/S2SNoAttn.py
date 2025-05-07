@@ -1,56 +1,62 @@
-import json
-from pathlib import Path
-from random import sample
+from typing import Union, Optional, List
 
-import numpy as np
+from numpy import ndarray
 import torch
+from tensorflow import Tensor
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import trange
-from tqdm.auto import tqdm
 
 from .BaseModel import BaseModel
+from ..Language import Language
 
 
 class S2SNoAttn(BaseModel):
     # def __init__(self, input_size, output_size, embed_size, hidden_size, num_layers=1):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        self.input_size = self.params["input_size"]
+        self.output_size = self.params["output_size"]
+        self.embed_size = self.params["embed_size"]
+        self.hidden_size = self.params["hidden_size"]
+        self.num_layers = self.params["num_layers"]
+        self.lr = self.params["lr"]
+        self.teacher_forcing_ratio = self.params["teacher_forcing_ratio"]
 
         # Encoder components
         self.encoder_embedding = nn.Embedding(
-            self.params["input_size"],
-            self.params["embed_size"],
+            self.input_size,
+            self.output_size,
         )
         self.encoder_lstm = nn.LSTM(
-            self.params["embed_size"],
-            self.params["hidden_size"],
-            num_layers=self.params["num_layers"],
+            self.output_size,
+            self.hidden_size,
+            num_layers=self.num_layers,
             bidirectional=True,
             batch_first=True,
         )
 
         # Decoder components
         self.decoder_embedding = nn.Embedding(
-            self.params["output_size"],
-            self.params["embed_size"],
+            self.output_size,
+            self.embed_size,
         )
         self.decoder_lstm = nn.LSTM(
-            self.params["embed_size"],
-            self.params["hidden_size"] * 2,
-            num_layers=self.params["num_layers"],
+            self.embed_size,
+            self.hidden_size * 2,
+            num_layers=self.num_layers,
             batch_first=True,
         )
         self.fc = nn.Linear(
-            self.params["hidden_size"] * 2,
-            self.params["output_size"],
+            self.hidden_size * 2,
+            self.output_size,
         )
 
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.params["lr"])
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)
 
-    def forward(self, src, trg):
+    def forward(self, src:Tensor, trg:Tensor) -> Tensor:
         batch_size, trg_len = trg.size()
         trg_vocab_size = self.fc.out_features
 
@@ -66,10 +72,10 @@ class S2SNoAttn(BaseModel):
         cell = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1).unsqueeze(0)
 
         # First input to the decoder is the <sos> token
-        input = trg[:, 0]
+        input_ = trg[:, 0]
 
         for t in range(1, trg_len):
-            embedded_trg = self.decoder_embedding(input).unsqueeze(1)
+            embedded_trg = self.decoder_embedding(input_).unsqueeze(1)
 
             # Decoder step
             output, (hidden, cell) = self.decoder_lstm(embedded_trg, (hidden, cell))
@@ -77,17 +83,14 @@ class S2SNoAttn(BaseModel):
             outputs[:, t, :] = prediction
 
             # Decide whether to use teacher forcing
-            teacher_force = torch.rand(1).item() < self.params["teacher_forcing_ratio"]
-            input = trg[:, t] if teacher_force else prediction.argmax(1)
+            teacher_force = torch.rand(1).item() < self.teacher_forcing_ratio
+            input_ = trg[:, t] if teacher_force else prediction.argmax(1)
 
         return outputs
 
-    def predict(self, src, lang_output):
+    def predict(self, src:Union[ndarray, list, Tensor], lang_output:Language) -> List[str]:
         self.eval()
-        if isinstance(src, (np.ndarray, list)):
-            src = torch.tensor(src, device=self.device)
-        else:
-            src = src.to(self.device)
+        src = self.to_tensor(src)
 
         # Encode the source sequence
         with torch.inference_mode():
@@ -101,11 +104,11 @@ class S2SNoAttn(BaseModel):
             cell = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1).unsqueeze(0)
 
             # Initialize the decoder input with the <sos> token
-            input = torch.tensor([lang_output.SOS_ID], device=self.device)
+            input_ = torch.tensor([lang_output.SOS_ID], device=self.device)
 
             outputs = [lang_output.SOS_ID]
-            for _ in range(self.params["max_len"]):
-                embedded_trg = self.decoder_embedding(input).unsqueeze(1)
+            for _ in range(self.output_size):
+                embedded_trg = self.decoder_embedding(input_).unsqueeze(1)
                 output, (hidden, cell) = self.decoder_lstm(embedded_trg, (hidden, cell))
                 prediction = self.fc(output.squeeze(1))
                 predicted_token = prediction.argmax(1).item()
@@ -115,20 +118,19 @@ class S2SNoAttn(BaseModel):
                 if predicted_token == lang_output.EOS_ID:
                     break
 
-                input = torch.tensor([predicted_token], device=self.device)
+                input_ = torch.tensor([predicted_token], device=self.device)
 
         return [lang_output.index2token[token] for token in outputs]
 
     def do_train(
             self,
-            device,
-            dataloader,
-            num_epochs=10,
-            teacher_forcing_ratio=0.5,
-            eval_every=None,
-            eval_fn=None,
-            eval_args=None,
-            from_epoch=0,
+            device:torch.device,
+            dataloader:DataLoader,
+            num_epochs:int = 10,
+            eval_every: Optional[int] = None,
+            eval_fn: Optional[callable] = None,
+            eval_args: Optional[dict] = None,
+            from_epoch: int = 0,
             **kwargs,
     ):
         scaler = torch.amp.GradScaler("cuda") if device.type == "cuda" else None

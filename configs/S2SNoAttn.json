@@ -1,4 +1,8 @@
 {
+  "input_size": "TO SPECIFY",
+  "output_size": "TO SPECIFY",
+  "max_input_length": "TO SPECIFY",
+  "max_output_length": "TO SPECIFY",
   "embed_size": 256,
   "hidden_size": 256,
   "num_layers": 1,
