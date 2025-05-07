@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 from io import StringIO
 from re import Pattern, compile, escape

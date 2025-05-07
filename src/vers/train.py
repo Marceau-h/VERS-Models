@@ -1,11 +1,15 @@
-from typing import Optional
+# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+from pathlib import Path
+from typing import Optional, Union
 
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from src import BaseModel
-from src.Language import read_data
+from . import BaseModel
+from .Language import read_data
 
 
 def expand_model_vocabulary(model, new_src_vocab_size, new_trg_vocab_size, device=None):
@@ -55,7 +59,7 @@ def auto_train(
         model_args: dict,
         batch_size: int,
         num_epochs: int,
-        lang_dir: str,
+        lang_dir: Union[str, Path],
         eval_every: Optional[int] = None,
         eval_fn: "function" = None,
         eval_args: dict = None,

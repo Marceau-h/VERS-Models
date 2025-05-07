@@ -1,9 +1,11 @@
+# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from typing import Union, Optional, List
 
 from numpy import ndarray
 import torch
-from tensorflow import Tensor
-from torch import nn
+from torch import nn, Tensor
 from torch.utils.data import DataLoader
 from tqdm import trange
 

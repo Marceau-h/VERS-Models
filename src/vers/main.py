@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from pathlib import Path
 from time import perf_counter_ns as ns
 from argparse import ArgumentParser

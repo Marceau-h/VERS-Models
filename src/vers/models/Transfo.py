@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import math
 from typing import Union, Optional, List
 

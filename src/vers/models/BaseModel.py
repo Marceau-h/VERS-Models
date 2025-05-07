@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 from abc import ABC, abstractmethod
 from datetime import datetime
