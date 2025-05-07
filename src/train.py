@@ -70,7 +70,9 @@ def auto_train(
 
     # Model setup
     model_args["input_size"] = lang_input.n_tokens
+    model_args["max_input_length"] = lang_input.max_length
     model_args["output_size"] = lang_output.n_tokens
+    model_args["max_output_length"] = lang_output.max_length
 
     print(f"Model args: {model_args}")
     model = model_class(**model_args).to(device)
