@@ -28,4 +28,4 @@ errors/**/
 *.parquet
 
 !/configs/*.json
-
+!\LICENSE.txt
