@@ -1,0 +1,13 @@
+{
+  "input_size": "TO SPECIFY",
+  "output_size": "TO SPECIFY",
+  "max_input_length": "TO SPECIFY",
+  "max_output_length": "TO SPECIFY",
+  "embed_size": 256,
+  "dropout": 0.1,
+  "num_heads": 8,
+  "num_encoder_layers": 6,
+  "num_decoder_layers": 6,
+  "ff_dim": 2048,
+  "lr": 0.001
+}
