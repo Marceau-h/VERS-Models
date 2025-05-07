@@ -35,31 +35,27 @@ def align_words(ref, hyp):
     return alignement, computed.wer
 
 
-def predict(model, input_sentence, lang_input, lang_output, device=None):
-    device = device or torch_device("cuda" if is_available() else "cpu")
-
+def predict(model, input_sentence, lang_input, lang_output):
     input_sentence_lst = [
         lang_input.index2token[token]
         for token in input_sentence
         if token != lang_input.PAD_ID
     ]
     predicted_output_lst = model.predict(
-        input_sentence, max_len=lang_output.n_tokens + 1, device=device, lang_output=lang_output
+        input_sentence, lang_output=lang_output
     )
 
     return input_sentence_lst, predicted_output_lst
 
 
-def do_one_sent(model, sentence, lang_input, lang_output, device=None):
-    device = device or torch_device("cuda" if is_available() else "cpu")
-
+def do_one_sent(model, sentence, lang_input, lang_output):
     input_sentence = (
             [lang_input.SOS_ID]
             + [lang_input.token2index[token] for token in lang_input.sent_iter(sentence)]
             + [lang_input.EOS_ID]
     )
 
-    input_sentence_lst, predicted_output_lst = predict(model, input_sentence, lang_input, lang_output, device)
+    input_sentence_lst, predicted_output_lst = predict(model, input_sentence, lang_input, lang_output)
 
     line1 = f"Input sentence: {sentence}"
     line2 = f"Predicted output: {' | '.join(predicted_output_lst)}"
@@ -114,7 +110,7 @@ def eval_numbers(
 
 
 
-def core_eval(X_test, y_test, lang_input, lang_output, model, nb_predictions=None, device=None, do_print=True):
+def core_eval(X_test, y_test, lang_input, lang_output, model, nb_predictions=None, do_print=True):
     print(f"Evaluating.. {len(X_test) = }, {len(y_test) = }")
     if nb_predictions is None:
         pbar = range(len(X_test))
@@ -131,7 +127,7 @@ def core_eval(X_test, y_test, lang_input, lang_output, model, nb_predictions=Non
         input_sentence = X_test[i]
         target_output = y_test[i]
 
-        input_sentence_lst, predicted_output_lst = predict(model, input_sentence, lang_input, lang_output, device)
+        input_sentence_lst, predicted_output_lst = predict(model, input_sentence, lang_input, lang_output)
         target_output_lst = [lang_output.index2token[token] for token in target_output if token != lang_output.PAD_ID]
 
         exact_match = target_output_lst == predicted_output_lst
