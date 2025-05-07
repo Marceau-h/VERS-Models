@@ -13,30 +13,39 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 SHUFFLE = True
 
+SOS_ID = 0
+SOS_TOKEN = 'SOS'
+EOS_ID = 1
+EOS_TOKEN = 'EOS'
+PAD_ID = 2
+PAD_TOKEN = 'PAD'
+
+
 class Language:
-    SOS_ID = 0
-    SOS_TOKEN = 'SOS'
-    EOS_ID = 1
-    EOS_TOKEN = 'EOS'
-    PAD_ID = 2
-    PAD_TOKEN = 'PAD'
+    # Bring the constants as class attrs
+    SOS_ID = SOS_ID
+    SOS_TOKEN = SOS_TOKEN
+    EOS_ID = EOS_ID
+    EOS_TOKEN = EOS_TOKEN
+    PAD_ID = PAD_ID
+    PAD_TOKEN = PAD_TOKEN
 
     def __init__(self, name:str, sep: Optional[Union[str, List[str]]] = None) -> None:
-        self.name = name
-        self.token2index = {
+        self.name: str = name
+        self.token2index: dict[str, int] = {
             self.SOS_TOKEN: self.SOS_ID,
             self.EOS_TOKEN: self.EOS_ID,
             self.PAD_TOKEN: self.PAD_ID
         }
-        self.token2count = {}
+        self.token2count: dict[str, int] = {}
         # self.index2token = {0: "SOS", 1: "EOS", 2: "PAD"}
-        self.index2token = {
+        self.index2token: dict[int, str] = {
             self.SOS_ID: self.SOS_TOKEN,
             self.EOS_ID: self.EOS_TOKEN,
             self.PAD_ID: self.PAD_TOKEN
         }
-        self.n_tokens = 3
-        self.max_length = 0
+        self.n_tokens: int = 3
+        self.max_length: int = 0
         self.sep: Optional[Union[str, List[str]]] = sep
         self.re_sep : Optional[str] = None
         self.re_sep_compiled : Optional[Pattern] = None
@@ -502,34 +511,35 @@ def extract_test_data(
 
 
 if __name__ == '__main__':
-    from model import paths
-
-    pho = True
-    json_ = False
-    json_mode = 2
-    suffixes = ["_ly", "_midi", "_notes"]
-    max_lens = [800, 800, 150]
-
-    midi_seps = ([",", " ", "[", "]"], "-")
-    ly_seps = ([" ", "\\", "\n", "{", "}", "|", "(", ")", "[", "]"], "-")
-    notes_seps = (" | ", "-")
-    seps = [ly_seps, midi_seps, notes_seps]
-
-    l1_sep, l2_sep = seps[json_mode]
-    suffix = "" if not json_ else suffixes[json_mode]
-    max_len = 1000 if not json else max_lens[json_mode]
-
-    params_path, model_path, og_lang_path, x_data, y_data, lang_path, eval_path = paths(pho, suffix, json_)
-
-    print(params_path, model_path, og_lang_path, x_data, y_data, lang_path, eval_path)
-
-    # if json_:
-    #     X, y, l1, l2 = Language.read_data_from_json(og_lang_path, max_length=max_len , l1_sep=l1_sep, l2_sep=l2_sep, reverse=True)
-    # else:
-    #     X, y, l1, l2 = Language.read_data_from_txt(og_lang_path)
+    pass
+    # from model import paths
     #
-    # Language.save_data(X, y, l1, l2, x_data, y_data, lang_path)
-
-    extract_test_data(x_data, y_data, lang_path, test_save_path=Path("test.txt"))
-    print("Done")
-
+    # pho = True
+    # json_ = False
+    # json_mode = 2
+    # suffixes = ["_ly", "_midi", "_notes"]
+    # max_lens = [800, 800, 150]
+    #
+    # midi_seps = ([",", " ", "[", "]"], "-")
+    # ly_seps = ([" ", "\\", "\n", "{", "}", "|", "(", ")", "[", "]"], "-")
+    # notes_seps = (" | ", "-")
+    # seps = [ly_seps, midi_seps, notes_seps]
+    #
+    # l1_sep, l2_sep = seps[json_mode]
+    # suffix = "" if not json_ else suffixes[json_mode]
+    # max_len = 1000 if not json else max_lens[json_mode]
+    #
+    # params_path, model_path, og_lang_path, x_data, y_data, lang_path, eval_path = paths(pho, suffix, json_)
+    #
+    # print(params_path, model_path, og_lang_path, x_data, y_data, lang_path, eval_path)
+    #
+    # # if json_:
+    # #     X, y, l1, l2 = Language.read_data_from_json(og_lang_path, max_length=max_len , l1_sep=l1_sep, l2_sep=l2_sep, reverse=True)
+    # # else:
+    # #     X, y, l1, l2 = Language.read_data_from_txt(og_lang_path)
+    # #
+    # # Language.save_data(X, y, l1, l2, x_data, y_data, lang_path)
+    #
+    # extract_test_data(x_data, y_data, lang_path, test_save_path=Path("test.txt"))
+    # print("Done")
+    #
