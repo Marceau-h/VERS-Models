@@ -2,13 +2,16 @@ import json
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any, Set, Union
+from typing import Optional, Any, Set, Union, Iterable
 
 import torch
 from numpy import ndarray
 from torch import nn, Tensor
 from torch.cuda import is_available
 from torch.optim import Optimizer
+from torch.utils.data import DataLoader
+
+from ..Language import Language
 
 
 class InvalidConfigError(Exception):
@@ -35,6 +38,10 @@ class BaseModel(ABC, nn.Module):
         "device",
         "lang_name",
         "class_name",
+        "input_size",
+        "output_size",
+        "max_input_length",
+        "max_output_length",
     }
     MANDATORY_KEYS: Set[str] = set()
     ALLOWED_KEYS: Set[str]  # abstract
@@ -52,7 +59,7 @@ class BaseModel(ABC, nn.Module):
         return cwd, relative_to_root
 
     @classmethod
-    def solve_paths(cls):
+    def solve_paths(cls) -> tuple[Path, int, Path, Path, Path, Path, Path, Path, Path]:
         root_dir, relative_to_root = cls.get_root_dir()
         lang_root = root_dir / cls.LANGS_ROOT_DIR_NAME
         eval_root = root_dir / cls.EVALS_ROOT_DIR_NAME
@@ -217,6 +224,7 @@ class BaseModel(ABC, nn.Module):
         # Read the config file and update the params
         self.params = self.read_config(**kwargs)
 
+
     def save(self) -> tuple[Path, Path]:
         """
         Save the model (and parameters) to its directory.
@@ -300,24 +308,32 @@ class BaseModel(ABC, nn.Module):
 
         return model, params, model_dir
 
+    def to_tensor(self, src:Union[ndarray, list, Tensor]) -> Tensor:
+        if isinstance(src, (ndarray, list)):
+            return torch.tensor(src, dtype=torch.long, device=self.device)
+        elif isinstance(src, Tensor):
+            return src.to(self.device)
+        else:
+            raise TypeError("src must be a numpy array, list, or torch tensor")
+
     @abstractmethod
-    def forward(self, src, trg) -> Tensor:
+    def forward(self, src:Tensor, trg:Tensor) -> Tensor:
         raise NotImplementedError("Forward method not implemented")
 
     @abstractmethod
-    def predict(self, src, lang_output) -> None:
+    def predict(self, src:Union[ndarray, list, Tensor], lang_output:Language) -> Iterable[str]:
         raise NotImplementedError("Predict method not implemented")
 
     @abstractmethod
     def do_train(
             self,
-            device,
-            dataloader,
-            num_epochs=10,
-            eval_every=None,
-            eval_fn=None,
-            eval_args=None,
-            from_epoch=0,
+            device:torch.device,
+            dataloader:DataLoader,
+            num_epochs:int = 10,
+            eval_every: Optional[int] = None,
+            eval_fn: Optional[callable] = None,
+            eval_args: Optional[dict] = None,
+            from_epoch: int = 0,
             **kwargs,
     ):
         raise NotImplementedError("Train method not implemented")
