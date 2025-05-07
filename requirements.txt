@@ -1,6 +1,6 @@
 numpy
 scikit-learn
-torch
+torch>=2
 tqdm
 jiwer
 cowsay
