@@ -91,7 +91,7 @@ class BaseModel(ABC, nn.Module):
 
 
 
-    def set_paths(self) -> None:
+    def set_paths(self, raise_twice=True) -> None:
         """
         Uses get_root_dir and the class variables to set the paths for the model, and other directories.
         """
@@ -134,12 +134,14 @@ class BaseModel(ABC, nn.Module):
         try:
             self.model_dir.mkdir(parents=True)
         except FileExistsError:
-            raise FileExistsError(f"Model directory {self.model_dir} {twice}")
+            if raise_twice:
+                raise FileExistsError(f"Model directory {self.model_dir} {twice}")
         self.checkpoints_dir = self.checkpoints_root / self.cls_name / self.start_datetime_str
         try:
             self.checkpoints_dir.mkdir(parents=True)
         except FileExistsError:
-            raise FileExistsError(f"Checkpoints directory {self.checkpoints_dir} {twice}")
+            if raise_twice:
+                raise FileExistsError(f"Checkpoints directory {self.checkpoints_dir} {twice}")
 
     def read_config(self, **kwargs) -> dict[str, Any]:
         """
@@ -227,7 +229,7 @@ class BaseModel(ABC, nn.Module):
         self.config_file: Path = None
         self.model_dir: Path = None
         self.checkpoints_dir: Path = None
-        self.set_paths()
+        self.set_paths(raise_twice=kwargs.get("raise_twice", True))
 
         # Read the config file and update the params
         self.params = self.read_config(**kwargs)
