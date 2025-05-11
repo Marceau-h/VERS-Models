@@ -19,6 +19,8 @@ try:
 except ImportError:
     from vers.Language import Language
 
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_tf32 = True
 
 class InvalidConfigError(Exception):
     def __init__(self, message: str):

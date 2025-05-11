@@ -18,8 +18,6 @@ except ImportError:
     from vers.models.BaseModel import BaseModel
     from vers.Language import Language, PAD_ID
 
-torch.backends.cudnn.allow_tf32 = True
-torch.backends.cuda.matmul.allow_tf32 = True
 
 class PositionalEncoding(nn.Module):
     """From the torch doc"""
