@@ -13,7 +13,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 
 RANDOM_STATE = 42
-TEST_SIZE = 0.2
+TRAIN_DEV_TEST_SPLIT = (.7, .15, .15)
 SHUFFLE = True
 
 SOS_ID = 0
@@ -23,6 +23,11 @@ EOS_TOKEN = 'EOS'
 PAD_ID = 2
 PAD_TOKEN = 'PAD'
 
+assert .999 < sum(TRAIN_DEV_TEST_SPLIT) < 1.001, f"TRAIN_DEV_TEST_SPLIT must sum to 1, got {sum(TRAIN_DEV_TEST_SPLIT)}"
+TRAIN_PART = TRAIN_DEV_TEST_SPLIT[0]
+DEV_PART = TRAIN_DEV_TEST_SPLIT[1]
+TEST_PART = TRAIN_DEV_TEST_SPLIT[2]
+DEV_TEST_RATIO = DEV_PART / (DEV_PART + TEST_PART)
 
 class Language:
     # Bring the constants as class attrs
@@ -458,7 +463,7 @@ class Language:
         with open(lang_path / 'lang.json', 'w') as f:
             json.dump({'1': l1.__dict__, '2': l2.__dict__}, f, ensure_ascii=False, indent=4, default=cls.clear_pattern_field_only)
 
-def read_data(lang_path: Union[str, Path]):
+def read_data(lang_path: Union[str, Path]) -> Tuple[np.array, np.array, np.array, np.array, np.array, np.array, "Language", "Language"]:
     """
     Reads the data from the files
     The data is split into X and y data, with a determined random state and test size (see constants) to be reproducible
@@ -466,8 +471,10 @@ def read_data(lang_path: Union[str, Path]):
     :param x_path: The path to the X data
     :param y_path: The path to the y data
     :param lang_path: The path to the language file (containing the two languages for X and y)
-    :return: Tuple of X_train, X_test, y_train, y_test, lang_input, lang_output
+    :return: Tuple of X_train, X_dev, X_test, y_train, y_dev, y_test, Language object for the input language, Language object for the output language
     """
+    assert .999 < sum(TRAIN_DEV_TEST_SPLIT) < 1.001, f"TRAIN_DEV_TEST_SPLIT must sum to 1, got {sum(TRAIN_DEV_TEST_SPLIT)}"
+
     assert isinstance(lang_path, Path), f"lang_path must be a string or a Path object"
     assert lang_path.exists(), f"Language path {lang_path} does not exist, please provide a valid path"
 
@@ -480,9 +487,11 @@ def read_data(lang_path: Union[str, Path]):
     assert l_path.exists(), f"Language path {l_path} does not exist"
 
     X, y, lang_input, lang_output = Language.load_data(x_path, y_path, l_path)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, shuffle=SHUFFLE)
+    X_train, X_dev_test, y_train, y_dev_test = train_test_split(X, y, test_size=1-TRAIN_PART, random_state=RANDOM_STATE, shuffle=SHUFFLE)
+    X_dev, X_test, y_dev, y_test = train_test_split(X_dev_test, y_dev_test, test_size=DEV_TEST_RATIO, random_state=RANDOM_STATE, shuffle=SHUFFLE)
 
-    return X_train, X_test, y_train, y_test, lang_input, lang_output
+
+    return X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output
 
 
 def extract_test_data(
@@ -491,7 +500,7 @@ def extract_test_data(
         lang_path: Union[str, Path] = 'lang.json',
         test_save_path: Optional[Union[str, Path]] = None
 ) -> Optional[str]:
-    X_train, X_test, y_train, y_test, lang_input, lang_output = read_data(x_path, y_path, lang_path)
+    X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(x_path, y_path, lang_path)
 
     if test_save_path is not None:
         if isinstance(test_save_path, str):
@@ -511,7 +520,6 @@ def extract_test_data(
 
     buf.close()
     return None
-
 
 if __name__ == '__main__':
     pass

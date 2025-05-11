@@ -75,7 +75,7 @@ def auto_train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Read data
-    X_train, X_test, y_train, y_test, lang_input, lang_output = read_data(
+    X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(
         lang_dir
     )
 
@@ -127,7 +127,7 @@ def auto_train(
         }
     )
 
-    return model, lang_input, lang_output, losses, evals, (X_train, X_test, y_train, y_test)
+    return model, lang_input, lang_output, losses, evals, (X_train, X_dev, X_test, y_train, y_dev, y_test)
 
 def find_best_batch_size(
     model_class: Type[BaseModel],
@@ -154,7 +154,7 @@ def find_best_batch_size(
 
     model_args["raise_twice"] = False
 
-    X_train, X_test, y_train, y_test, _, _ = read_data(lang_dir)
+    X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_dir)
     tensor_data = TensorDataset(torch.tensor(X_train), torch.tensor(y_train))
 
     def _test(bs: int) -> Optional[float]:

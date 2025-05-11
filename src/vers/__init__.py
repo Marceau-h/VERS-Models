@@ -4,7 +4,10 @@
 from .Language import (
     Language,
     RANDOM_STATE,
-    TEST_SIZE,
+    TRAIN_PART,
+    DEV_PART,
+    TEST_PART,
+    DEV_TEST_RATIO,
     SHUFFLE,
     SOS_ID,
     SOS_TOKEN,
@@ -30,7 +33,10 @@ __all__ = [
 
     "Language",
     "RANDOM_STATE",
-    "TEST_SIZE",
+    "TRAIN_PART",
+    "DEV_PART",
+    "TEST_PART",
+    "DEV_TEST_RATIO",
     "SHUFFLE",
     "SOS_ID",
     "SOS_TOKEN",
