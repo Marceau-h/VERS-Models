@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from pathlib import Path
+from typing import Optional
 
 import torch
 
@@ -20,7 +21,9 @@ except ImportError:
 def main(
         do_train: bool = False,
         num_epochs: int = 10,
-        batch_size: int = 2048,
+        batch_size: Optional[int] = None,
+        min_batch_size: Optional[int] = None,
+        max_batch_size: Optional[int] = None,
 
         lang_input: str = "",
         lang_name: str = "",
@@ -80,9 +83,11 @@ def main(
         ) = auto_train(
             model_class=model_class,
             model_args=model_args,
-            batch_size=batch_size,
             num_epochs=num_epochs,
             lang_dir=lang_root / lang_name,
+            batch_size=batch_size,
+            min_batch_size=min_batch_size,
+            max_batch_size=max_batch_size,
         )
 
         model.save()

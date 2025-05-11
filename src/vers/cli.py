@@ -47,7 +47,15 @@ def cli():
     )
     parser.add_argument(
         "--batch_size", type=int,
-        help="Batch size"
+        help="Batch size for training, if specified would not search for the best batch size"
+    )
+    parser.add_argument(
+        "--min_batch_size", type=int,
+        help="Minimum batch size, if specified with max_batch_size would search for the best batch size"
+    )
+    parser.add_argument(
+        "--max_batch_size", type=int,
+        help="Maximum batch size, if specified with min_batch_size would search for the best batch size"
     )
 
     parser.add_argument(
@@ -98,7 +106,10 @@ def cli():
 
     if parsed.train:
         assert parsed.num_epochs is not None, "num_epochs must be specified when training"
-        assert parsed.batch_size is not None, "batch_size must be specified when training"
+        # assert parsed.batch_size is not None, "batch_size must be specified when training"
+        if parsed.batch_size is None:
+            assert parsed.min_batch_size is not None, "min_batch_size must be specified when training if batch_size is not specified"
+            assert parsed.max_batch_size is not None, "max_batch_size must be specified when training if batch_size is not specified"
 
     model_args = {}
     for arg in unknown:
@@ -124,6 +135,8 @@ def cli():
         do_train=parsed.train,
         num_epochs=parsed.num_epochs,
         batch_size=parsed.batch_size,
+        min_batch_size=parsed.min_batch_size,
+        max_batch_size=parsed.max_batch_size,
         lang_input=parsed.lang_input,
         lang_name=parsed.lang_name,
         make_lang=parsed.make_lang,
