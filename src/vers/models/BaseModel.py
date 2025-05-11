@@ -347,3 +347,26 @@ class BaseModel(ABC, nn.Module):
             **kwargs,
     ):
         raise NotImplementedError("Train method not implemented")
+
+    def __del__(self):
+        if not list(self.model_dir.iterdir()):
+            self.model_dir.rmdir()
+        if not list(self.checkpoints_dir.iterdir()):
+            self.checkpoints_dir.rmdir()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.params})"
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.params})"
+
+    def __hash__(self):
+        return hash((self.__class__.__name__, frozenset(self.params.items())))
+
+    def __eq__(self, other):
+        if not isinstance(other, BaseModel):
+            return False
+        return self.__class__.__name__ == other.__class__.__name__ and self.params == other.params
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
