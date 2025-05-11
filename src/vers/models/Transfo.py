@@ -11,8 +11,12 @@ from torch.nn import Transformer
 from torch.utils.data import DataLoader
 from tqdm import trange
 
-from .BaseModel import BaseModel
-from ..Language import Language, PAD_ID
+try:
+    from .BaseModel import BaseModel
+    from ..Language import Language, PAD_ID
+except ImportError:
+    from vers.models.BaseModel import BaseModel
+    from vers.Language import Language, PAD_ID
 
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cuda.matmul.allow_tf32 = True

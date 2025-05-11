@@ -27,7 +27,10 @@ def main(*args, **kwargs):
     """
     Delays the import of the main function to validate the arguments first without wasting time on imports.
     """
-    from .main import main
+    try:
+        from .main import main
+    except ImportError:
+        from vers.main import main
     return main(*args, **kwargs)
 
 

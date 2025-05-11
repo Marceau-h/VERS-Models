@@ -8,8 +8,12 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from . import BaseModel
-from .Language import read_data
+try:
+    from .models import BaseModel
+    from .Language import read_data
+except ImportError:
+    from vers.models import BaseModel
+    from vers.Language import read_data
 
 
 def expand_model_vocabulary(model, new_src_vocab_size, new_trg_vocab_size, device=None):

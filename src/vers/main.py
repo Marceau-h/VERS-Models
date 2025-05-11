@@ -5,10 +5,16 @@ from pathlib import Path
 
 import torch
 
-from .Language import Language, read_data
-from .eval import random_predict, do_full_eval
-from .models import models
-from .train import auto_train
+try:
+    from .Language import Language, read_data
+    from .eval import random_predict, do_full_eval
+    from .models import models
+    from .train import auto_train
+except ImportError:
+    from vers.Language import Language, read_data
+    from vers.eval import random_predict, do_full_eval
+    from vers.models import models
+    from vers.train import auto_train
 
 
 def main(

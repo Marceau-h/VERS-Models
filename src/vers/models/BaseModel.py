@@ -14,7 +14,10 @@ from torch.cuda import is_available
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from ..Language import Language
+try:
+    from ..Language import Language
+except ImportError:
+    from vers.Language import Language
 
 
 class InvalidConfigError(Exception):

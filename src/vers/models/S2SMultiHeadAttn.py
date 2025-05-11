@@ -12,8 +12,12 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from tqdm import trange
 
-from .BaseModel import BaseModel
-from ..Language import Language, PAD_ID
+try:
+    from .BaseModel import BaseModel
+    from ..Language import Language, PAD_ID
+except ImportError:
+    from vers.models.BaseModel import BaseModel
+    from vers.Language import Language, PAD_ID
 
 class S2SMultiHeadAttn(BaseModel):
     # def __init__(self, input_size, output_size, embed_size, hidden_size, num_layers=1, num_heads=8):

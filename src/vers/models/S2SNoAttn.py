@@ -9,9 +9,12 @@ from torch import nn, Tensor
 from torch.utils.data import DataLoader
 from tqdm import trange
 
-from .BaseModel import BaseModel
-from ..Language import Language
-
+try:
+    from .BaseModel import BaseModel
+    from ..Language import Language
+except ImportError:
+    from vers.models.BaseModel import BaseModel
+    from vers.Language import Language
 
 class S2SNoAttn(BaseModel):
     # def __init__(self, input_size, output_size, embed_size, hidden_size, num_layers=1):
