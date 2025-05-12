@@ -1,4 +1,4 @@
-# VERS
+# VERS-Models
 
 [![PyPI - Version](https://img.shields.io/pypi/v/vers-models.svg)](https://pypi.org/project/vers-models)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/vers-models.svg)](https://pypi.org/project/vers-models)
@@ -27,8 +27,8 @@ Vous pouvez ensuite vérifier que l'installation s'est bien passée en lançant 
 ### Développement
 Pour installer VERS en mode développement, vous pouvez cloner le dépôt git et installer les dépendances avec pip:
 ```bash
-git clone https://github.com/Marceau-H/VERS.git.
-cd VERS
+git clone https://github.com/Marceau-H/VERS-Models.git.
+cd VERS-Models
 pip install -e .
 ```
 

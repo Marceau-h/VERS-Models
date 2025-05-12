@@ -38,31 +38,31 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/Marceau-H/vers#readme"
-Issues = "https://github.com/Marceau-H/vers/issues"
-Source = "https://github.com/Marceau-H/vers"
+Documentation = "https://github.com/Marceau-H/vers_models#readme"
+Issues = "https://github.com/Marceau-H/vers_models/issues"
+Source = "https://github.com/Marceau-H/vers_models"
 
 
 [tool.hatch.version]
-path = "src/vers/__about__.py"
+path = "src/vers_models/__about__.py"
 
 [tool.hatch.envs.types]
 extra-dependencies = [
     "mypy>=1.0.0",
 ]
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/vers tests}"
+check = "mypy --install-types --non-interactive {args:src/vers_models tests}"
 
 [tool.coverage.run]
-source_pkgs = ["vers"]
+source_pkgs = ["vers_models"]
 branch = true
 parallel = true
 omit = [
-    "src/vers/__about__.py",
+    "src/vers_models/__about__.py",
 ]
 
 [tool.coverage.paths]
-vers = ["src/vers", "*/vers/src/vers"]
+vers_models = ["src/vers_models", "*/vers_models/src/vers_models"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -72,4 +72,4 @@ exclude_lines = [
 ]
 
 [project.scripts]
-vers = "vers.cli:cli"
+vers = "vers_models.cli:cli"
