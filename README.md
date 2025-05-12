@@ -1,7 +1,7 @@
 # VERS
 
-[![PyPI - Version](https://img.shields.io/pypi/v/vers.svg)](https://pypi.org/project/vers)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/vers.svg)](https://pypi.org/project/vers)
+[![PyPI - Version](https://img.shields.io/pypi/v/vers-models.svg)](https://pypi.org/project/vers-models)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/vers-models.svg)](https://pypi.org/project/vers-models)
 
 
 ## Table des matières
@@ -20,7 +20,7 @@
 ### PyPi
 VERS est disponible sur PyPi, vous pouvez l'installer avec pip à l'aide de la commande suivante:
 ```bash
-pip install vers
+pip install vers-models
 ```
 Vous pouvez ensuite vérifier que l'installation s'est bien passée en lançant la commande `vers --version`
 
