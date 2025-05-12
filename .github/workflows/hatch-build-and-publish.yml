@@ -1,0 +1,248 @@
+name: Hatch Build and Publish
+run-name: HATCH to PyPI by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*'
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  get-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get current branch
+        id: check_step
+        run: |
+          raw=$(git branch -r --contains ${{ github.ref }})
+          if [[ -z "$raw" ]]; then
+            raw=$(git branch -r --contains ${{ github.sha }})
+          fi
+          if [[ -z "$raw" ]]; then
+            echo "No branch found for ${{ github.ref }} or ${{ github.sha }}."
+            echo "This is probably a tag push without the associated commit pushed as well."
+            exit 1
+          fi
+          BRANCH=${raw##*/}
+          BRANCH=$(echo $BRANCH | base64 -w 0)
+          echo "BRANCH=$BRANCH" >> $GITHUB_OUTPUT
+          echo "Branch is $BRANCH."
+    outputs:
+      branch-name: ${{ steps.check_step.outputs.BRANCH }}
+
+  envs:
+    runs-on: ubuntu-latest
+    needs: get-ref
+    steps:
+      - name: Decode ref
+        id: decode_ref
+        run: |
+          name=${{ needs.get-ref.outputs.branch-name }}
+          name=$(echo $name | base64 -d)
+          echo "NAME=$name" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ env.NAME }}
+            fetch-depth: 0
+
+      - name: Set env
+        id: set-env
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG=$(echo $GITHUB_REF | cut -d / -f 3)
+            echo "TAG=$TAG" >> $GITHUB_ENV
+            echo "VER=$TAG" >> $GITHUB_ENV
+            TAG_MESSAGE=$(git tag -l --format='%(contents)' $TAG | sed 's/ *$//g' | sed '/^[[:space:]]*$/d' | base64 -w 0)
+          else
+              echo "VER=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+              echo "TAG=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+              TAG_MESSAGE=$(echo "No tag" | base64 -w 0)
+          fi
+          echo "REF=${{ needs.get-ref.outputs.branch-name }}" >> $GITHUB_ENV
+          echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+          echo "TAG_MESSAGE=$TAG_MESSAGE" >> $GITHUB_ENV
+          
+          MESSAGE=$(git show -s --format=%s | base64 -w 0)
+          echo "MESSAGE=$MESSAGE" >> $GITHUB_ENV
+    
+          user=$(git show -s --format=%an | base64 -w 0)
+          echo "USER=$user" >> $GITHUB_ENV
+          email=$(git show -s --format=%ae | base64 -w 0)
+          echo "EMAIL=$email" >> $GITHUB_ENV
+
+    outputs:
+      ver: ${{ env.VER }}
+      tag: ${{ env.TAG }}
+      ref: ${{ env.REF }}
+      date: ${{ env.DATE }}
+      message: ${{ env.MESSAGE }}
+      user: ${{ env.USER }}
+      email: ${{ env.EMAIL }}
+      tag_message: ${{ env.TAG_MESSAGE }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    environment: release
+    needs:
+        - get-ref
+        - envs
+    steps:
+      - name: Decode ref
+        id: decode_ref
+        run: |
+          name=${{ needs.get-ref.outputs.branch-name }}
+          echo "Encoded ref is $name"
+          name=$(echo $name | base64 -d)
+          echo "Decoded ref is $name"
+          echo "REF=$name" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REF }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip 
+          pip install hatch
+
+      - name: Version bump
+        if : ${{ github.event_name != 'push' }}
+        run: |
+          hatch version fix
+          echo "Version bumped"
+
+      - name: Version from tag
+        if : ${{ github.event_name == 'push' }}
+        run: |
+          TAG=${{ needs.envs.outputs.tag }}
+          echo "TAG=$TAG"
+          hatch version $TAG 
+          # && echo "Version set to $TAG" || echo "Version already exists" && exit 1
+
+      - name: Build package
+        run: |
+          hatch build
+
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Update the about.py file
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update about.py file"
+          file_pattern: "src/vers/__about__.py"
+          status_options: '--untracked-files=no'
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.REF }}
+
+      - name : Check stuff
+        run: |
+          ls -Al
+          ls -Al dist          
+
+      - name: Deploy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vers
+          path: ./dist/*
+          if-no-files-found: 'error'
+
+  release:
+    if: '!cancelled()'
+    needs:
+        - deploy
+        - envs
+        - get-ref
+    name: Release wheel and source distribution to GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: ./dist
+
+      - name: Display structure of downloaded files
+        run: |
+          list=$(ls -R ./dist)
+          echo $list
+          if [[ $list -eq "" ]]; then
+              echo "No files found in ./dist"
+              exit 1
+          fi
+
+      - name: Write release text
+        id: write_release
+        run: |
+            echo "VERS release for commit ${{ github.sha }}" > release.md
+            echo "By @${{ github.actor }}" >> release.md
+          
+            if [[ "${{ needs.envs.outputs.tag }}" == "latest" ]]; then
+                echo "Manually triggered release for the latest commit on branch ${{ needs.envs.outputs.ref }}" >> release.md
+            else
+                echo "Auto-generated release for the tag ${{ needs.envs.outputs.tag }}" >> release.md
+                TAG_MESSAGE=${{ needs.envs.outputs.tag_message }}
+                TAG_MESSAGE=$(echo $TAG_MESSAGE | base64 -d)
+                echo "Tag message: \`$TAG_MESSAGE\`" >> release.md
+            fi
+            message=${{ needs.envs.outputs.message }}
+            message=$(echo $message | base64 -d)
+            echo "Commit message: \`$message\`" >> release.md
+            echo "Commit date: ${{ needs.envs.outputs.date }}" >> release.md
+
+      - name: Display release text
+        run: cat release.md
+
+      - name: Change user for release
+        run: |
+          user=${{ needs.envs.outputs.user }}
+          user=$(echo $user | base64 -d)
+          echo "User is $user"
+          
+          email=${{ needs.envs.outputs.email }}
+          email=$(echo $email | base64 -d)
+          echo "Email is $email"
+          
+          git config --global user.name "$user"
+          git config --global user.email "$email"
+
+      - name: release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: ${{ needs.envs.outputs.ver }}
+          tag_name: ${{ needs.envs.outputs.tag }}
+          body_path: release.md
+#          draft: ${{ needs.envs.outputs.tag == 'latest' }} # only draft prereleases
+#          prerelease: ${{ needs.envs.outputs.tag == 'latest' }} # prerelease when no version in commit tag
+          draft: ( 1 if ${{ needs.envs.outputs.tag == 'latest' }} else 0 )
+          prerelease: ( 1 if ${{ needs.envs.outputs.tag == 'latest' }} else 0 )
+          files: |
+            ./dist/*
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
