@@ -1,0 +1,26 @@
+https://stackoverflow.com/questions/1871549/how-to-determine-if-python-is-running-inside-a-virtualenv
+
+THIS
+
+import os
+
+running_in_virtualenv = bool(os.getenv("VIRTUAL_ENV"))
+
+AND THAT
+
+import sys
+
+real_prefix = getattr(sys, "real_prefix", None)
+base_prefix = getattr(sys, "base_prefix", sys.prefix)
+
+running_in_virtualenv = (base_prefix or real_prefix) != sys.prefix
+
+OR THIS
+
+if [ $CONDA_DEFAULT_ENV ]        ## << note the spaces (important in BASH)!
+    then
+        printf 'venv: operating in tf-env, proceed ...'
+    else
+        printf 'Note: must run this script in tf-env venv'
+        exit
+fi
