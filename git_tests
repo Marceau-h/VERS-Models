@@ -1,0 +1,9 @@
+git remote show origin -n
+
+r"^\w+\s:\shttps://github.com/Marceau-h/VERS.git$" in stdout
+
+OR
+
+git remote -v
+r"origin\shttps://github.com/Marceau-h/VERS.git\s(fetch)"
+
