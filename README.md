@@ -7,10 +7,10 @@
 ## Table des matières
 1. [Description](#description)
 2. [Installation](#installation)
-    1. [PyPi](#pypi)
-   2[Développement](#développement)
+   1. [PyPi](#pypi)
+   2. [Développement](#développement)
 3. [Usage](#usage)
-   1[Ligne de commande](#ligne-de-commande)
+   1. [Ligne de commande](#ligne-de-commande)
 4. [License](#license)
 
 
