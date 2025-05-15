@@ -30,7 +30,7 @@ def main(*args, **kwargs):
     try:
         from .main import main
     except ImportError:
-        from vers.main import main
+        from vers_models.main import main
     return main(*args, **kwargs)
 
 
