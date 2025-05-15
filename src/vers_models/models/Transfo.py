@@ -15,8 +15,8 @@ try:
     from .BaseModel import BaseModel
     from ..Language import Language, PAD_ID
 except ImportError:
-    from vers.models.BaseModel import BaseModel
-    from vers.Language import Language, PAD_ID
+    from vers_models.models.BaseModel import BaseModel
+    from vers_models.Language import Language, PAD_ID
 
 
 class PositionalEncoding(nn.Module):

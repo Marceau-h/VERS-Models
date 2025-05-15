@@ -16,8 +16,8 @@ try:
     from .BaseModel import BaseModel
     from ..Language import Language, PAD_ID
 except ImportError:
-    from vers.models.BaseModel import BaseModel
-    from vers.Language import Language, PAD_ID
+    from vers_models.models.BaseModel import BaseModel
+    from vers_models.Language import Language, PAD_ID
 
 class S2SMultiHeadAttn(BaseModel):
     # def __init__(self, input_size, output_size, embed_size, hidden_size, num_layers=1, num_heads=8):

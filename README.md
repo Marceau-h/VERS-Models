@@ -27,7 +27,7 @@ Vous pouvez ensuite vérifier que l'installation s'est bien passée en lançant 
 ### Développement
 Pour installer VERS en mode développement, vous pouvez cloner le dépôt git et installer les dépendances avec pip:
 ```bash
-git clone https://github.com/Marceau-H/VERS-Models.git.
+git clone https://github.com/Marceau-H/VERS-Models.git
 cd VERS-Models
 pip install -e .
 ```
