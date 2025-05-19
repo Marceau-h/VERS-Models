@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2028-present Marceau <git@marceau-h.fr>
+# SPDX-FileCopyrightText: 2025-present Marceau <git@marceau-h.fr>
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from time import perf_counter_ns as ns
