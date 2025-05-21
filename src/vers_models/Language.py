@@ -553,4 +553,28 @@ if __name__ == '__main__':
     #
     # extract_test_data(x_data, y_data, lang_path, test_save_path=Path("test.txt"))
     # print("Done")
-    #
+
+
+    from vers_models import BaseModel
+
+    max_lenth = 280
+    input_sep = None
+    l2_sep = "-"
+    json_ = True
+    lang_input = Path("../../data_metrique_strophe.json")
+
+    (
+        root_dir,
+        relative_to_root,
+        lang_root,
+        eval_root,
+        errors_root,
+        logs_root,
+        checkpoints_root,
+        configs_root,
+        model_root
+    ) = BaseModel.solve_paths()
+
+    X, y, l1, l2 = Language.read_data_from_json(lang_input, max_length=max_lenth, l1_sep=input_sep, l2_sep=l2_sep)
+
+    Language.save_data(X, y, l1, l2, lang_path=lang_root / "metrique_strophe2", overwrite=True)
