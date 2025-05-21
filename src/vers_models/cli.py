@@ -4,6 +4,13 @@
 from time import perf_counter_ns as ns
 from argparse import ArgumentParser
 
+try:
+    from .__about__ import __version__
+    from .models import models
+except ImportError:
+    from vers_models.__about__ import __version__
+    from vers_models.models import models
+
 
 def pretty_time(ns: int) -> str:
     """
@@ -33,8 +40,21 @@ def main(*args, **kwargs):
         from vers_models.main import main
     return main(*args, **kwargs)
 
+def list_models() -> str:
+    """
+    List all available models
+    :return: A string representation of all available models
+    """
+    return "Available models :\n\t" + "\n\t".join(
+        f"{name} -> {model.__name__};"
+        for name, model in models.items()
+        if name != "base"
+    )
+
 
 def cli():
+    models_str = list_models()
+
     parser = ArgumentParser()
 
     parser.add_argument(
@@ -98,7 +118,16 @@ def cli():
         help="Use the latest model if datetime_str is not provided"
     )
 
-
+    parser.add_argument(
+        "--version", action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show the version of the program"
+    )
+    parser.add_argument(
+        "--list_models", action="version",
+        version=models_str,
+        help="List all available models"
+    )
 
     parsed, unknown = parser.parse_known_args()
     print("Parsed arguments:", parsed)
