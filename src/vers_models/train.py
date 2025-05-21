@@ -16,6 +16,8 @@ except ImportError:
     from vers_models.models import BaseModel
     from vers_models.Language import read_data
 
+BYTES_TO_GB = 1 / (1024 ** 3)
+
 
 def expand_model_vocabulary(model, new_src_vocab_size, new_trg_vocab_size, device=None):
     """Expand model embedding layers to accommodate larger vocabularies."""
@@ -170,8 +172,9 @@ def find_best_batch_size(
             for _ in range(num_warmup):
                 _ = model(src, trg)
 
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
         start = time.perf_counter()
         # with torch.no_grad():
             # for _ in range(num_iters):
@@ -182,8 +185,19 @@ def find_best_batch_size(
             trg = trg.to(device)
             _ = model(src, trg)
 
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        if device.type == "cuda":
+            free, tot = torch.cuda.mem_get_info()
+            free_gb = free * BYTES_TO_GB
+            usage = tot - free
+            usage_gb = usage * BYTES_TO_GB
+            # print(f"Batch size {bs} uses {usage_gb:.2f} GB, free {free_gb:.2f} GB")
+            if free_gb < 1:
+                raise RuntimeError(
+                    f"out of memory :size {bs} OOMs, free memory {free_gb:.2f} GB, usage {usage_gb:.2f} GB"
+                )
+
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
         elapsed = (time.perf_counter() - start) / num_iters
         return elapsed * nb_batches
 
@@ -221,4 +235,9 @@ def find_best_batch_size(
             low = mid
             best_time = t_mid
     print(f"Best batch size: {low} ({best_time:.2f}s)")
+
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+
     return low
