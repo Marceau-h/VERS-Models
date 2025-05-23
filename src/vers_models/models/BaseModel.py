@@ -275,7 +275,10 @@ class BaseModel(ABC, nn.Module):
         assert len(model_s) > 0, "model_s must be a non-empty iterable of Paths"
 
         for model in model_s:
-            with (model / "params.json").open(mode="r", encoding="utf-8") as f:
+            params_file = model / "params.json"
+            if not params_file.exists():
+                continue
+            with params_file.open(mode="r", encoding="utf-8") as f:
                 params = json.load(f)
             if params["lang_name"] == lang_name:
                 return model
