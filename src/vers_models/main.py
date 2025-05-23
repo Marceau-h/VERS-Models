@@ -102,8 +102,7 @@ def main(
         X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_path=lang_root / lang_name)
         print("Model, data, and parameters loaded successfully")
 
-    # Test prediction
-    random_predict(X_dev, y_dev, lang_input, lang_output, model, device=device, nb_predictions=nb_predictions)
-
     if full_eval:
-        do_full_eval(X_dev, y_dev, lang_input, lang_output, model, device=device)
+        do_full_eval(X_dev, y_dev, lang_input, lang_output, model, batch_size)
+    else:
+        random_predict(X_dev, y_dev, lang_input, lang_output, model, batch_size, nb_predictions=nb_predictions)
