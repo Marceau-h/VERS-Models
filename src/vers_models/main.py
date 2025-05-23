@@ -93,8 +93,12 @@ def main(
         model.save()
 
     else:
-        model, state, old_vocab_size = model_class.load(datetime_str, default_to_latest, lang_name, device)
-
+        model, state, old_vocab_size = model_class.load(
+            lang_name=lang_name,
+            datetime_str=datetime_str,
+            default_to_latest=default_to_latest,
+            device=device
+        )
         X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_path=lang_root / lang_name)
         print("Model, data, and parameters loaded successfully")
 
