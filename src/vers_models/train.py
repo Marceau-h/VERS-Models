@@ -191,7 +191,7 @@ def find_best_batch_size(
             usage = tot - free
             usage_gb = usage * BYTES_TO_GB
             # print(f"Batch size {bs} uses {usage_gb:.2f} GB, free {free_gb:.2f} GB")
-            if free_gb < 1:
+            if free_gb < .2:
                 raise RuntimeError(
                     f"out of memory :size {bs} OOMs, free memory {free_gb:.2f} GB, usage {usage_gb:.2f} GB"
                 )

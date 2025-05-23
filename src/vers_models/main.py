@@ -11,11 +11,13 @@ try:
     from .eval import random_predict, do_full_eval
     from .models import models
     from .train import auto_train
+    from .profiler import profiler_wrapper
 except ImportError:
     from vers_models.Language import Language, read_data
     from vers_models.eval import random_predict, do_full_eval
     from vers_models.models import models
     from vers_models.train import auto_train
+    from vers_models.profiler import profiler_wrapper
 
 
 def main(
@@ -38,7 +40,13 @@ def main(
 
         datetime_str: str = None,
         default_to_latest: bool = True,
+        with_profiler: bool = False,
 ):
+
+    train_func = profiler_wrapper(auto_train, profile_=with_profiler)
+    full_eval_func = profiler_wrapper(do_full_eval, profile_=with_profiler)
+    random_eval_func = profiler_wrapper(random_predict, profile_=with_profiler)
+
     assert lang_name, "lang_name must be provided"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -73,22 +81,16 @@ def main(
 
     if do_train:
         model_args["pretrained"] = False
-        (
-            model,
-            lang_input,
-            lang_output,
-            losses,
-            evals,
-            (X_train, X_dev, X_test, y_train, y_dev, y_test),
-        ) = auto_train(
-            model_class=model_class,
-            model_args=model_args,
-            num_epochs=num_epochs,
-            lang_dir=lang_root / lang_name,
-            batch_size=batch_size,
-            min_batch_size=min_batch_size,
-            max_batch_size=max_batch_size,
-        )
+        model, lang_input, lang_output, losses, evals, (X_train, X_dev, X_test, y_train, y_dev, y_test) = \
+            train_func(
+                model_class=model_class,
+                model_args=model_args,
+                num_epochs=num_epochs,
+                lang_dir=lang_root / lang_name,
+                batch_size=batch_size,
+                min_batch_size=min_batch_size,
+                max_batch_size=max_batch_size,
+            )
 
         model.save()
 
@@ -99,10 +101,11 @@ def main(
             default_to_latest=default_to_latest,
             device=device
         )
-        X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_path=lang_root / lang_name)
+        X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = \
+            read_data(lang_path=lang_root / lang_name)
         print("Model, data, and parameters loaded successfully")
 
     if full_eval:
-        do_full_eval(X_dev, y_dev, lang_input, lang_output, model, batch_size)
+        full_eval_func(X_dev, y_dev, lang_input, lang_output, model, batch_size)
     else:
-        random_predict(X_dev, y_dev, lang_input, lang_output, model, batch_size, nb_predictions=nb_predictions)
+        random_eval_func(X_dev, y_dev, lang_input, lang_output, model, batch_size, nb_predictions=nb_predictions)

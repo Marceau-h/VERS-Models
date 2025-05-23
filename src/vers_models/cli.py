@@ -128,6 +128,10 @@ def cli():
         version=models_str,
         help="List all available models"
     )
+    parser.add_argument(
+        "--with_profiler", action="store_true",
+        help="Enable profiling of training and evaluation"
+    )
 
     parsed, unknown = parser.parse_known_args()
     print("Parsed arguments:", parsed)
@@ -175,7 +179,8 @@ def cli():
         model_class=parsed.model_class,
         model_args=model_args,
         datetime_str=parsed.datetime_str,
-        default_to_latest=parsed.default_to_latest
+        default_to_latest=parsed.default_to_latest,
+        with_profiler=parsed.with_profiler,
     )
     print(f"Done ! Took {pretty_time(ns() - start_time)}")
 
