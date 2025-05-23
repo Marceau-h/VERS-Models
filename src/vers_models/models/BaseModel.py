@@ -294,9 +294,10 @@ class BaseModel(ABC, nn.Module):
             default_to_latest: bool = True,
             device: Optional[Union[str, torch.device]] = None,
             **kwargs
-    ) -> tuple[type["BaseModel"], Any, Path]:
+    ) -> tuple[type["BaseModel"], dict[str, Any], Path]:
         """
         Load the model from the given path.
+        :param lang_name: The language name to load the model for.
         :param datetime_str: The datetime string to load the model from.
         :param default_to_latest: If True, load the latest model if datetime_str is not provided and multiple models exist.
         :param device: The device to load the model on. If None, tries to use cuda.
@@ -312,7 +313,7 @@ class BaseModel(ABC, nn.Module):
 
         if datetime_str is None:
             if default_to_latest:
-                lst_models = sorted(model_root_dir.iterdir(), key=lambda x: x.stat().st_mtime)
+                lst_models = sorted(model_root_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
                 if len(lst_models) == 0:
                     raise FileNotFoundError(f"Model directory {model_root_dir} is empty, no model to load.")
                 model_dir = cls.ensure_compatibility(lst_models, lang_name)
@@ -335,9 +336,9 @@ class BaseModel(ABC, nn.Module):
             raise InvalidConfigError(
                 f"Model {params['class_name']} is not compatible with the current class {cls.__name__}, please load the model using the correct class.")
 
-        params.device = device
+        params["device"] = device
 
-        model = cls(**params)
+        model = cls(**params).to(device)
 
         model.load_state_dict(torch.load(model_dir / Path("model.pth"), map_location=device))
 
