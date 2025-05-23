@@ -401,3 +401,12 @@ class BaseModel(ABC, nn.Module):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def __delete__(self, instance):
+        """
+        Clean up the model directory and checkpoints directory if they are empty.
+        """
+        if not list(self.model_dir.iterdir()):
+            self.model_dir.rmdir()
+        if not list(self.checkpoints_dir.iterdir()):
+            self.checkpoints_dir.rmdir()
