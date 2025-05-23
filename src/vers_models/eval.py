@@ -39,6 +39,9 @@ def align_words(ref, hyp):
 
 
 def predict(model, input_sentence, lang_input, lang_output):
+    if torch.is_tensor(input_sentence) and input_sentence.dim() == 1:
+        input_sentence = input_sentence.unsqueeze(0)
+
     if torch.is_tensor(input_sentence) and input_sentence.dim() > 1:
         batch = input_sentence.to(model.device)
         input_sentence_lst = lang_input.index2token_sent(batch)
