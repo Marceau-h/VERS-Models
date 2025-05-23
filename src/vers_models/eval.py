@@ -142,7 +142,7 @@ def core_eval(X_test, y_test, lang_input, lang_output, model, batch_size, nb_pre
 
     model.eval()
     res = []
-    with torch.no_grad():
+    with torch.inference_mode():
         for input_tensor, target_tensor in pbar:
             # Batch to device
             input_tensor = input_tensor.to(model.device, non_blocking=True)
