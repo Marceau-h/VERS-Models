@@ -9,6 +9,7 @@ from typing import Tuple, Optional, List, Union
 from collections.abc import Collection
 from unicodedata import normalize
 
+import torch
 import numpy as np
 from sklearn.model_selection import train_test_split
 
@@ -162,6 +163,23 @@ class Language:
         :return: sentence
         """
         return self.sent_uniter([self.index2token[index] for index in indices if index not in [self.SOS_ID, self.EOS_ID, self.PAD_ID]])
+
+    def index2token_sent(self, indices_batch):
+        """
+        Convert a batch of index sequences to token lists, removing special tokens.
+        :param indices_batch: np.ndarray or torch.Tensor of shape (batch_size, seq_len)
+        :return: List of List of tokens for each sequence
+        """
+        # Convert torch.Tensor to numpy
+        if isinstance(indices_batch, torch.Tensor):
+            indices = indices_batch.cpu().numpy()
+        else:
+            indices = indices_batch
+        return [
+            [self.index2token[int(idx)] for idx in row
+             if idx not in {self.PAD_ID}]
+            for row in indices
+        ]
 
     @classmethod
     def read_data_from_txt(
