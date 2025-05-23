@@ -6,7 +6,7 @@ from io import StringIO
 from re import Pattern, compile, escape
 from pathlib import Path
 from typing import Tuple, Optional, List, Union
-from collections.abc import Collection
+from collections.abc import Collection, MutableMapping
 from unicodedata import normalize
 
 import torch
@@ -30,6 +30,66 @@ DEV_PART = TRAIN_DEV_TEST_SPLIT[1]
 TEST_PART = TRAIN_DEV_TEST_SPLIT[2]
 DEV_TEST_RATIO = DEV_PART / (DEV_PART + TEST_PART)
 
+
+class CustomDict(MutableMapping, dict):
+    """
+    Custom dict to be able to specify the types of the keys and values and allow some coercion
+    """
+
+    def __init__(self, *args, key_type: type, value_type: type, **kwargs):
+        """
+        :param key_type: type of the keys
+        :param value_type: type of the values
+        :param args: arguments to pass to the dict constructor
+        :param kwargs: keyword arguments to pass to the dict
+        """
+
+        super().__init__(*args, **kwargs)
+        self.key_type = key_type
+        self.value_type = value_type
+
+    def __getitem__(self, key):
+        if not isinstance(key, self.key_type):
+            try:
+                key = self.key_type(key)
+            except Exception as e:
+                raise TypeError(f"Key must be of type {self.key_type}, got {type(key)}") from e
+        return dict.__getitem__(self, key)
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, self.key_type):
+            try:
+                key = self.key_type(key)
+            except Exception as e:
+                raise TypeError(f"Key must be of type {self.key_type}, got {type(key)}") from e
+        if not isinstance(value, self.value_type):
+            try:
+                value = self.value_type(value)
+            except Exception as e:
+                raise TypeError(f"Value must be of type {self.value_type}, got {type(value)}") from e
+        dict.__setitem__(self, key, value)
+
+    def __delitem__(self, key):
+        dict.__delitem__(self, key)
+
+    def __iter__(self):
+        return dict.__iter__(self)
+
+    def __len__(self):
+        return dict.__len__(self)
+
+    def __contains__(self, key):
+        if not isinstance(key, self.key_type):
+            try:
+                key = self.key_type(key)
+            except Exception as e:
+                raise TypeError(f"Key must be of type {self.key_type}, got {type(key)}") from e
+        return dict.__contains__(self, key)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}<{self.key_type.__name__}, {self.value_type.__name__}>({super().__repr__()})"
+
+
 class Language:
     # Bring the constants as class attrs
     SOS_ID = SOS_ID
@@ -39,25 +99,37 @@ class Language:
     PAD_ID = PAD_ID
     PAD_TOKEN = PAD_TOKEN
 
-    def __init__(self, name:str, sep: Optional[Union[str, List[str]]] = None) -> None:
+    def __init__(self, name: str, sep: Optional[Union[str, List[str]]] = None) -> None:
         self.name: str = name
-        self.token2index: dict[str, int] = {
-            self.SOS_TOKEN: self.SOS_ID,
-            self.EOS_TOKEN: self.EOS_ID,
-            self.PAD_TOKEN: self.PAD_ID
-        }
-        self.token2count: dict[str, int] = {}
-        # self.index2token = {0: "SOS", 1: "EOS", 2: "PAD"}
-        self.index2token: dict[int, str] = {
-            self.SOS_ID: self.SOS_TOKEN,
-            self.EOS_ID: self.EOS_TOKEN,
-            self.PAD_ID: self.PAD_TOKEN
-        }
+        self.token2index: CustomDict[str, int] = CustomDict(
+            {
+                self.SOS_TOKEN: self.SOS_ID,
+                self.EOS_TOKEN: self.EOS_ID,
+                self.PAD_TOKEN: self.PAD_ID
+            },
+            key_type=str,
+            value_type=int
+        )
+        self.token2count: CustomDict[str, int] = CustomDict(
+            {},
+            key_type=str,
+            value_type=int
+        )
+        self.index2token: CustomDict[int, str] = CustomDict(
+            {
+                self.SOS_ID: self.SOS_TOKEN,
+                self.EOS_ID: self.EOS_TOKEN,
+                self.PAD_ID: self.PAD_TOKEN
+            },
+            key_type=int,
+            value_type=str
+        )
+
         self.n_tokens: int = 3
         self.max_length: int = 0
         self.sep: Optional[Union[str, List[str]]] = sep
-        self.re_sep : Optional[str] = None
-        self.re_sep_compiled : Optional[Pattern] = None
+        self.re_sep: Optional[str] = None
+        self.re_sep_compiled: Optional[Pattern] = None
 
     @staticmethod
     def normalize(s: str) -> str:
@@ -154,7 +226,12 @@ class Language:
         :param sentence: sentence to get the indices from
         :return: list of indices
         """
-        return [self.SOS_ID] + [self.token2index[token] for token in self.sent_iter(sentence)] + [self.EOS_ID] + [self.PAD_ID] * (self.max_length - self.sent_len(sentence))
+        return (
+                [self.SOS_ID]
+                + [self.token2index[token] for token in self.sent_iter(sentence)]
+                + [self.EOS_ID]
+                + [self.PAD_ID] * (self.max_length - self.sent_len(sentence))
+        )
 
     def sentence_from_indices(self, indices: List[int]) -> str:
         """
@@ -162,7 +239,11 @@ class Language:
         :param indices: list of indices to get the sentence from
         :return: sentence
         """
-        return self.sent_uniter([self.index2token[index] for index in indices if index not in [self.SOS_ID, self.EOS_ID, self.PAD_ID]])
+        return self.sent_uniter(
+            [self.index2token[index]
+             for index in indices
+             if index not in [self.SOS_ID, self.EOS_ID, self.PAD_ID]]
+        )
 
     def index2token_sent(self, indices_batch):
         """
@@ -175,9 +256,14 @@ class Language:
             indices = indices_batch.cpu().numpy()
         else:
             indices = indices_batch
+        if isinstance(indices, np.ndarray) and indices.ndim == 1:
+            indices = indices[np.newaxis, :]
         return [
-            [self.index2token[int(idx)] for idx in row
-             if idx not in {self.PAD_ID}]
+            [
+                self.index2token[idx]
+                for idx in row
+                if idx not in {self.PAD_ID}
+            ]
             for row in indices
         ]
 
@@ -237,7 +323,6 @@ class Language:
 
             l1.sep = l1_sep
             l2.sep = l2_sep
-
 
         for pair in pairs:
             l1.add_sentence(pair[0])
@@ -319,7 +404,6 @@ class Language:
                 and 0 < l2.sent_len(e["output"]) <= max_length
             ]
 
-
         pairs = [
             (
                 e_1, e_2
@@ -328,12 +412,10 @@ class Language:
             if e_1 and e_2
         ]
 
-
         lens = [l1.sent_len(pair[0]) for pair in pairs]
         print(len(lens), min(lens), max(lens), sum(lens) / len(lens))
         lens2 = [l2.sent_len(pair[1]) for pair in pairs]
         print(len(lens2), min(lens2), max(lens2), sum(lens2) / len(lens2))
-
 
         for pair in pairs:
             l1.add_sentence(pair[0])
@@ -367,7 +449,6 @@ class Language:
         X = np.array(X)
         y = np.array(y)
         return X, y, l1, l2
-
 
     @classmethod
     def load_data(
@@ -433,6 +514,21 @@ class Language:
         """
         self.__dict__.update(lang)
         self.reintify_lang()
+        self.token2index = CustomDict(
+            self.token2index,
+            key_type=str,
+            value_type=int
+        )
+        self.index2token = CustomDict(
+            self.index2token,
+            key_type=int,
+            value_type=str
+        )
+        self.token2count = CustomDict(
+            self.token2count,
+            key_type=str,
+            value_type=int
+        )
 
     @staticmethod
     def clear_pattern_field_only(obj: object) -> None:
@@ -479,9 +575,18 @@ class Language:
         np.save(lang_path / 'y.npy', y)
 
         with open(lang_path / 'lang.json', 'w') as f:
-            json.dump({'1': l1.__dict__, '2': l2.__dict__}, f, ensure_ascii=False, indent=4, default=cls.clear_pattern_field_only)
+            json.dump(
+                {'1': l1.__dict__, '2': l2.__dict__},
+                f,
+                ensure_ascii=False,
+                indent=4,
+                default=cls.clear_pattern_field_only
+            )
 
-def read_data(lang_path: Union[str, Path]) -> Tuple[np.array, np.array, np.array, np.array, np.array, np.array, "Language", "Language"]:
+
+def read_data(
+        lang_path: Union[str, Path]
+) -> Tuple[np.array, np.array, np.array, np.array, np.array, np.array, "Language", "Language"]:
     """
     Reads the data from the files
     The data is split into X and y data, with a determined random state and test size (see constants) to be reproducible
@@ -491,7 +596,8 @@ def read_data(lang_path: Union[str, Path]) -> Tuple[np.array, np.array, np.array
     :param lang_path: The path to the language file (containing the two languages for X and y)
     :return: Tuple of X_train, X_dev, X_test, y_train, y_dev, y_test, Language object for the input language, Language object for the output language
     """
-    assert .999 < sum(TRAIN_DEV_TEST_SPLIT) < 1.001, f"TRAIN_DEV_TEST_SPLIT must sum to 1, got {sum(TRAIN_DEV_TEST_SPLIT)}"
+    assert .999 < sum(TRAIN_DEV_TEST_SPLIT) < 1.001, \
+        f"TRAIN_DEV_TEST_SPLIT must sum to 1, got {sum(TRAIN_DEV_TEST_SPLIT)}"
 
     assert isinstance(lang_path, Path), f"lang_path must be a string or a Path object"
     assert lang_path.exists(), f"Language path {lang_path} does not exist, please provide a valid path"
@@ -505,9 +611,20 @@ def read_data(lang_path: Union[str, Path]) -> Tuple[np.array, np.array, np.array
     assert l_path.exists(), f"Language path {l_path} does not exist"
 
     X, y, lang_input, lang_output = Language.load_data(x_path, y_path, l_path)
-    X_train, X_dev_test, y_train, y_dev_test = train_test_split(X, y, test_size=1-TRAIN_PART, random_state=RANDOM_STATE, shuffle=SHUFFLE)
-    X_dev, X_test, y_dev, y_test = train_test_split(X_dev_test, y_dev_test, test_size=DEV_TEST_RATIO, random_state=RANDOM_STATE, shuffle=SHUFFLE)
-
+    X_train, X_dev_test, y_train, y_dev_test = train_test_split(
+        X,
+        y,
+        test_size=1 - TRAIN_PART,
+        random_state=RANDOM_STATE,
+        shuffle=SHUFFLE
+    )
+    X_dev, X_test, y_dev, y_test = train_test_split(
+        X_dev_test,
+        y_dev_test,
+        test_size=DEV_TEST_RATIO,
+        random_state=RANDOM_STATE,
+        shuffle=SHUFFLE
+    )
 
     return X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output
 
@@ -538,6 +655,7 @@ def extract_test_data(
 
     buf.close()
     return None
+
 
 if __name__ == '__main__':
     pass
@@ -571,7 +689,6 @@ if __name__ == '__main__':
     #
     # extract_test_data(x_data, y_data, lang_path, test_save_path=Path("test.txt"))
     # print("Done")
-
 
     from vers_models import BaseModel
 
