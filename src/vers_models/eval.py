@@ -7,9 +7,9 @@ from statistics import mean
 from typing import List, Optional, Tuple
 
 from jiwer import process_words, visualize_alignment
-from torch import device as torch_device
-from torch.cuda import is_available
 from tqdm.auto import tqdm
+import torch
+from torch.utils.data import DataLoader, TensorDataset
 
 try:
     import cowsay
@@ -39,15 +39,26 @@ def align_words(ref, hyp):
 
 
 def predict(model, input_sentence, lang_input, lang_output):
+    if torch.is_tensor(input_sentence) and input_sentence.dim() > 1:
+        batch = input_sentence.to(model.device)
+        input_sentence_lst = lang_input.index2token_sent(batch)
+        # Predict each sample individually
+        predicted_output_lst = [model.predict(row, lang_output=lang_output) for row in batch]
+        return input_sentence_lst, predicted_output_lst
+
+    if isinstance(input_sentence, list) and input_sentence and isinstance(input_sentence[0], (list, tuple)):
+        batch = torch.tensor(input_sentence, dtype=torch.long, device=model.device)
+        input_sentence_lst = lang_input.index2token_sent(batch)
+        predicted_output_lst = [model.predict(list(seq), lang_output=lang_output) for seq in input_sentence]
+        return input_sentence_lst, predicted_output_lst
+
+    # Single sequence
     input_sentence_lst = [
         lang_input.index2token[token]
         for token in input_sentence
         if token != lang_input.PAD_ID
     ]
-    predicted_output_lst = model.predict(
-        input_sentence, lang_output=lang_output
-    )
-
+    predicted_output_lst = model.predict(input_sentence, lang_output=lang_output)
     return input_sentence_lst, predicted_output_lst
 
 
@@ -113,41 +124,45 @@ def eval_numbers(
 
 
 
-def core_eval(X_test, y_test, lang_input, lang_output, model, nb_predictions=None, do_print=True):
+def core_eval(X_test, y_test, lang_input, lang_output, model, batch_size, nb_predictions=None, do_print=True):
     print(f"Evaluating.. {len(X_test) = }, {len(y_test) = }")
+    # Prepare dataset and dataloader for evaluation
+    dataset = TensorDataset(torch.tensor(X_test, dtype=torch.long), torch.tensor(y_test, dtype=torch.long))
+    # Subset for nb_predictions if specified
     if nb_predictions is None:
-        pbar = range(len(X_test))
+        eval_dataset = dataset
     elif isinstance(nb_predictions, int) and nb_predictions > 0:
-        pbar = sample(range(len(X_test)), nb_predictions) if nb_predictions < len(X_test) else range(len(X_test))
+        indices = sample(list(range(len(X_test))), min(nb_predictions, len(X_test)))
+        from torch.utils.data import Subset
+        eval_dataset = Subset(dataset, indices)
     else:
         raise ValueError("nb_predictions must be a positive integer or None")
+    dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
+    pbar = tqdm(dataloader, desc="Evaluating", unit="batch") if do_print else dataloader
 
-    if do_print:
-        pbar = tqdm(pbar, desc="Evaluating", unit="sentence")
-
+    model.eval()
     res = []
-    for i in pbar:
-        input_sentence = X_test[i]
-        target_output = y_test[i]
-
-        input_sentence_lst, predicted_output_lst = predict(model, input_sentence, lang_input, lang_output)
-        target_output_lst = [lang_output.index2token[token] for token in target_output if token != lang_output.PAD_ID]
-
-        exact_match = target_output_lst == predicted_output_lst
-
-        sum_diff, len_diff, mean_diff, same_diff, same_diff_same_len = eval_numbers(target_output_lst, predicted_output_lst, lang_output)
-
-        aligned, wer = align_words(target_output_lst, predicted_output_lst)
-
-        res.append((input_sentence_lst, target_output_lst, predicted_output_lst, aligned, exact_match, wer, sum_diff, len_diff, mean_diff, same_diff, same_diff_same_len))
-
+    with torch.no_grad():
+        for input_tensor, target_tensor in pbar:
+            # Batch to device
+            input_tensor = input_tensor.to(model.device, non_blocking=True)
+            target_tensor = target_tensor.to(model.device, non_blocking=True)
+            # Predict batch
+            input_lsts, pred_lsts = predict(model, input_tensor, lang_input, lang_output)
+            # Convert targets
+            target_lsts = lang_output.index2token_sent(target_tensor)
+            # For each sample in batch
+            for inp, tgt, pred in zip(input_lsts, target_lsts, pred_lsts):
+                exact_match = tgt == pred
+                sum_diff, len_diff, mean_diff, same_diff, same_diff_same_len = eval_numbers(tgt, pred, lang_output)
+                aligned, wer = align_words(tgt, pred)
+                res.append((inp, tgt, pred, aligned, exact_match, wer, sum_diff, len_diff, mean_diff, same_diff, same_diff_same_len))
     return res
 
 
-def random_predict(X_test, y_test, lang_input, lang_output, model, device=None, print_output=True, nb_predictions=10):
-    device = device or torch_device("cuda" if is_available() else "cpu")
-
-    res = core_eval(X_test, y_test, lang_input, lang_output, model, nb_predictions, device)
+def random_predict(X_test, y_test, lang_input, lang_output, model, batch_size, print_output=True, nb_predictions=10):
+    # Evaluate random samples
+    res = core_eval(X_test, y_test, lang_input, lang_output, model, batch_size, nb_predictions=nb_predictions, do_print=print_output)
 
     input_joiner = " " if lang_input.re_sep is not None else "" if lang_input.sep is None else lang_input.sep
 
@@ -199,11 +214,10 @@ Same diff same len: {same_diff_same_len}
     return res
 
 
-def evaluate(X_test, y_test, lang_input, lang_output, model, device=None, do_print=True):
+def evaluate(X_test, y_test, lang_input, lang_output, model, batch_size, do_print=True):
     num_mode = False
-    device = device or torch_device("cuda" if is_available() else "cpu")
 
-    res = core_eval(X_test, y_test, lang_input, lang_output, model, None, device, do_print)
+    res = core_eval(X_test, y_test, lang_input, lang_output, model, batch_size, nb_predictions=None, do_print=do_print)
 
     exact_match = mean(r[4] for r in res)
     wer_score = mean(r[5] for r in res)
@@ -255,12 +269,12 @@ def evaluate(X_test, y_test, lang_input, lang_output, model, device=None, do_pri
     return res, exact_match, wer_score, res_for_save
 
 
-def do_full_eval(X_test, y_test, lang_input, lang_output, model, device):
+def do_full_eval(X_test, y_test, lang_input, lang_output, model, batch_size):
     import polars as pl
 
-    res, accuracy, wer_score, res_for_save = evaluate(X_test, y_test, lang_input, lang_output, model, device=device)
+    res, accuracy, wer_score, res_for_save = evaluate(X_test, y_test, lang_input, lang_output, model, batch_size)
 
-    df = pl.DataFrame(res_for_save)
+    df = pl.DataFrame(res_for_save, infer_schema_length=10_000_000)
 
     df = df[[s.name for s in df if not (s.null_count() == df.height)]]  # remove columns with only null values (numbers cols if there arent any)
 
