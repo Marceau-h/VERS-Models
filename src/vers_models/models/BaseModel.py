@@ -257,10 +257,38 @@ class BaseModel(ABC, nn.Module):
 
         return self.model_dir / Path("model.pth"), self.model_dir / Path("params.json")
 
+    @staticmethod
+    def ensure_compatibility(
+            model_s: Union[Path, Iterable[Path]],
+            lang_name: str,
+    ) -> Optional[Path]:
+        """
+        Ensure that the model is compatible with the current class and language.
+        :param model_s: The model to check.
+        :param lang_name: The language name to check.
+        :return: The model if any is compatible, None otherwise. (should be considered as a Result object)
+        """
+        if isinstance(model_s, Path):
+            model_s = [model_s]
+
+        assert all(isinstance(model, Path) for model in model_s), "model_s must be a Path or an iterable of Paths"
+        assert len(model_s) > 0, "model_s must be a non-empty iterable of Paths"
+
+        for model in model_s:
+            with (model / "params.json").open(mode="r", encoding="utf-8") as f:
+                params = json.load(f)
+            if params["lang_name"] == lang_name:
+                return model
+
+        return None
+
+
+
     @classmethod
     def load(
             cls,
             /,
+            lang_name: str,
             *args,
             datetime_str: Optional[str] = None,
             default_to_latest: bool = True,
@@ -287,7 +315,8 @@ class BaseModel(ABC, nn.Module):
                 lst_models = sorted(model_root_dir.iterdir(), key=lambda x: x.stat().st_mtime)
                 if len(lst_models) == 0:
                     raise FileNotFoundError(f"Model directory {model_root_dir} is empty, no model to load.")
-                model_dir = lst_models[-1]
+                model_dir = cls.ensure_compatibility(lst_models, lang_name)
+                assert model_dir is not None, f"No compatible models were found in {model_root_dir} for {lang_name}, please double check the language name and the desired model class."
             else:
                 raise FileNotFoundError(
                     f"`default_to_latest` was manually set to False, please specify a datetime string if you want to load a specific model or leave the `default_to_latest` to True.")
@@ -296,6 +325,8 @@ class BaseModel(ABC, nn.Module):
             if not model_dir.exists():
                 raise FileNotFoundError(
                     f"Model directory {model_dir} does not exist, have you specified the correct datetime string ?")
+            model_dir = cls.ensure_compatibility(model_dir, lang_name)
+            assert model_dir is not None, f"Model directory {model_dir} does exist but was trained on another lang than {lang_name}, please double check the language name and the desired model class."
 
         with open(model_dir / Path("params.json"), "r", encoding="utf-8") as f:
             params = json.load(f)
