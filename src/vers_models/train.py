@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2025-present Marceau <git@marceau-h.fr>
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import sys
 import time
 from pathlib import Path
 from typing import Optional, Union, Type, Dict, Any
@@ -11,13 +12,13 @@ from torch.utils.data import DataLoader, TensorDataset
 
 try:
     from .models import BaseModel
-    from .Language import read_data
+    from .Language import read_data, read_data_1_lang
 except ImportError:
     from vers_models.models import BaseModel
-    from vers_models.Language import read_data
+    from vers_models.Language import read_data, read_data_1_lang
 
 BYTES_TO_GB = 1 / (1024 ** 3)
-
+MAXINT = sys.maxsize
 
 def expand_model_vocabulary(model, new_src_vocab_size, new_trg_vocab_size, device=None):
     """Expand model embedding layers to accommodate larger vocabularies."""
@@ -60,7 +61,6 @@ def expand_model_vocabulary(model, new_src_vocab_size, new_trg_vocab_size, devic
 
     return model.to(device)
 
-
 def auto_train(
         model_class: type[BaseModel],
         model_args: dict,
@@ -72,14 +72,20 @@ def auto_train(
         eval_every: Optional[int] = None,
         eval_fn: "function" = None,
         eval_args: dict = None,
+        single_lang: bool = False,
 
 ):
+    # print(f"{single_lang = }")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Read data
-    X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(
-        lang_dir
-    )
+    if single_lang:
+        X_train, X_dev, X_test, lang_input = read_data_1_lang(lang_dir)
+        y_train, y_dev, y_test, lang_output = X_train, X_dev, X_test, lang_input  # In single language mode, input and output are the same
+    else:
+        X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(
+            lang_dir
+        )
 
     # Model setup
     model_args["input_size"] = lang_input.n_tokens
@@ -109,7 +115,8 @@ def auto_train(
             lang_dir=lang_dir,
             min_batch_size=min_batch_size,
             max_batch_size=max_batch_size,
-            device=device
+            device=device,
+            single_lang=single_lang,
         )
 
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -140,6 +147,7 @@ def find_best_batch_size(
     device: Optional[Union[str, torch.device]] = None,
     num_warmup: int = 10,
     num_iters: int = 10,
+    single_lang: bool = False,
 ) -> int:
     """
     Binary‐search the largest batch size between [min_batch_size, max_batch_size] that fits
@@ -154,10 +162,21 @@ def find_best_batch_size(
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    if max_batch_size == -1:
+        max_batch_size = MAXINT
+
     model_args["raise_twice"] = False
 
-    X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_dir)
+    # X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_dir)
+    if single_lang:
+        X_train, X_dev, X_test, lang_input = read_data_1_lang(lang_dir)
+        y_train, y_dev, y_test, lang_output = X_train, X_dev, X_test, lang_input
+    else:
+        X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = read_data(lang_dir)
     tensor_data = TensorDataset(torch.tensor(X_train), torch.tensor(y_train))
+
+    data_size = len(tensor_data)
+    max_batch_size = min(max_batch_size, data_size) # Useless to try larger than the dataset size
 
     def _test(bs: int) -> Optional[float]:
         loader = DataLoader(tensor_data, batch_size=bs, shuffle=False)
