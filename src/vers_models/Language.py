@@ -245,7 +245,7 @@ class Language:
              if index not in [self.SOS_ID, self.EOS_ID, self.PAD_ID]]
         )
 
-    def index2token_sent(self, indices_batch):
+    def index2token_sent(self, indices_batch) -> List[List[str]]:
         """
         Convert a batch of index sequences to token lists, removing special tokens.
         :param indices_batch: np.ndarray or torch.Tensor of shape (batch_size, seq_len)
@@ -258,14 +258,27 @@ class Language:
             indices = indices_batch
         if isinstance(indices, np.ndarray) and indices.ndim == 1:
             indices = indices[np.newaxis, :]
-        return [
-            [
-                self.index2token[idx]
-                for idx in row
-                if idx not in {self.PAD_ID}
-            ]
-            for row in indices
+
+        temp = [
+        [
+            self.index2token[idx]
+            if idx in self.index2token
+            else f"<UNK_{idx}>"
+            for idx in row
+            if idx not in {self.PAD_ID}
         ]
+        for row in indices
+        ]
+
+        if any(s.startswith("<UNK_") for ls in temp for s in ls):
+            raise ValueError(
+                "Some indices in the batch do not correspond to any token in the index2token mapping. "
+                "Check if the indices are valid and if the language has been properly initialized.\n"
+                f" Invalid indices found: {[s for ls in temp for s in ls if s.startswith('<UNK_')]}.\n"
+                f"{self.index2token}\n"
+                f"{[s for ls in temp for s in ls if s.startswith('<UNK_')]}"
+            )
+        return temp
 
     @classmethod
     def read_data_from_txt(
