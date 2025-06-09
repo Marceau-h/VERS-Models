@@ -480,6 +480,103 @@ class Language:
         return X, y, l1, l2
 
     @classmethod
+    def read_data_from_json_1_lang(
+            cls,
+            data_path: Union[str, Path],
+            max_length: int = 1000,
+            l_sep: Optional[str] = None,
+            which_lang: Optional[int] = None,
+            extra_vocab: Optional[Collection[str]] = None,
+    ) -> Tuple[np.array, "Language"]:
+        """
+        Function to read data from a json file for an autoencoder
+        :param data_path: The path to the json file
+        :param max_length: maximum length of a sentence
+        :param l_sep: The separator for the language
+        :param which_lang: Which language to use (1 or 2), if None, assumes that the json file contains a single language
+        :param extra_vocab: Extra vocabulary to add to the language
+        :output: Tuple of X, Language object for the input language
+        """
+        if isinstance(data_path, str):
+            data_path = Path(data_path)
+        elif not isinstance(data_path, Path):
+            raise ValueError("data_path must be a string or a Path object")
+
+        assert data_path.exists(), f"Data path {data_path} does not exist"
+
+        with data_path.open("r") as f:
+            pairs = json.load(f)
+
+        l = cls('1', sep=l_sep)
+
+        if extra_vocab is not None:
+            for token in extra_vocab:
+                l.add_token(token)
+
+        if which_lang is not None:
+            assert which_lang in {1,2}, "which_lang must be 1 or 2"
+            if isinstance(pairs, dict):
+                single = [
+                    (
+                        e.strip() if which_lang == 1 else k.strip()
+                    )
+                    for k, v in pairs.items()
+                    for e in v
+                    if 0 < l.sent_len(e if which_lang == 1 else k) <= max_length
+                ]
+            elif isinstance(pairs, list):
+                single = [
+                    (
+                        e["input"].strip() if which_lang == 1 else e["output"].strip()
+                    )
+                    for e in pairs
+                    if 0 < l.sent_len(e["input"] if which_lang == 1 else e["output"]) <= max_length
+                ]
+            else:
+                raise ValueError("pairs must be a dict or a list of dicts")
+        else:
+            if isinstance(pairs, dict):
+                single = [
+                    e.strip() for k, v in pairs.items() for e in v
+                    if 0 < l.sent_len(e) <= max_length
+                ]
+            elif isinstance(pairs, list):
+                single = [
+                    e["input"].strip() for e in pairs
+                    if 0 < l.sent_len(e["input"]) <= max_length
+                ]
+            else:
+                raise ValueError("pairs must be a dict or a list of dicts")
+        single = [
+            e for e in single
+            if e and 0 < l.sent_len(e) <= max_length
+        ]
+
+        for sentence in single:
+            l.add_sentence(sentence)
+
+        print("L", l.token2index)
+        print("count", l.token2count)
+        print("Max length", l.max_length)
+
+        # 1/0
+
+        X = np.array(
+            [
+                [cls.SOS_ID] +
+                [
+                    l.token2index[token] for token in l.sent_iter(sentence)
+                ] + [cls.EOS_ID] + [cls.PAD_ID] * (l.max_length - l.sent_len(sentence))
+
+                for sentence in single
+            ]
+
+        )
+        print(len(X), X[0], len(X[0]))
+        return X, l
+
+
+    @classmethod
     def load_data(
             cls,
             X_path: Union[str, Path],
@@ -524,6 +621,43 @@ class Language:
         l2.restore_lang(lang['2'])
 
         return X, y, l1, l2
+
+    @classmethod
+    def load_data_1_lang(
+            cls,
+            X_path: Union[str, Path],
+            lang_path: Union[str, Path],
+    ) -> Tuple[np.array, "Language"]:
+        """
+        Loads back the data from the files
+        :param X_path: The path to the X data
+        :param y_path: The path to the y data
+        :param lang_path: The path to the language file (containing the two languages for X and y)
+        :return:
+        """
+        if isinstance(X_path, str):
+            X_path = Path(X_path)
+        elif not isinstance(X_path, Path):
+            raise ValueError("X_path must be a string or a Path object")
+
+        if isinstance(lang_path, str):
+            lang_path = Path(lang_path)
+        elif not isinstance(lang_path, Path):
+            raise ValueError("lang_path must be a string or a Path object")
+
+        assert X_path.exists(), f"X path {X_path} does not exist"
+        assert lang_path.exists(), f"Language path {lang_path} does not exist"
+
+        X = np.load(X_path)
+
+        with open(lang_path, 'r') as f:
+            lang = json.load(f)
+
+        l = cls('1')
+
+        l.restore_lang(lang['1'])
+
+        return X, l
 
     def reintify_lang(self) -> None:
         """
@@ -591,6 +725,7 @@ class Language:
         :param X_path: The path to save the X data
         :param y_path: The path to save the y data
         :param lang_path: The path to save the language file
+        :param overwrite: Whether to overwrite the files if they already exist
         :return: None
         """
         assert isinstance(lang_path, Path), f"lang_path must be a string or a Path object"
@@ -612,10 +747,44 @@ class Language:
                 default=cls.clear_pattern_field_only
             )
 
+    @classmethod
+    def save_data_1_lang(
+            cls,
+            X: np.array,
+            l1: "Language",
+            lang_path: Union[str, Path],
+            overwrite: bool = False,
+    ) -> None:
+        """
+        Save the data to the files for a single language (autoencoder)
+        :param X: The numpy array of the input data
+        :param l1: The Language object for the input language
+        :param lang_path: The path to save the language file
+        :param overwrite: Whether to overwrite the files if they already exist
+        :return: None
+        """
+        assert isinstance(lang_path, Path), f"lang_path must be a string or a Path object"
+        try:
+            lang_path.mkdir(parents=True, exist_ok=overwrite)
+        except FileExistsError:
+            if not overwrite:
+                raise FileExistsError(f"Directory {lang_path} already exists, please provide a different path or set overwrite to True")
+
+        np.save(lang_path / 'X.npy', X)
+
+        with open(lang_path / 'lang.json', 'w') as f:
+            json.dump(
+                {'1': l1.__dict__},
+                f,
+                ensure_ascii=False,
+                indent=4,
+                default=cls.clear_pattern_field_only
+            )
+
 
 def read_data(
         lang_path: Union[str, Path]
-) -> Tuple[np.array, np.array, np.array, np.array, np.array, np.array, "Language", "Language"]:
+) -> Tuple[np.array, np.array, np.array, np.array, np.array, np.array, Language, Language]:
     """
     Reads the data from the files
     The data is split into X and y data, with a determined random state and test size (see constants) to be reproducible
@@ -657,6 +826,44 @@ def read_data(
 
     return X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output
 
+def read_data_1_lang(
+        lang_path: Union[str, Path]
+) -> Tuple[np.array, np.array, np.array, Language]:
+    """
+    Reads the data from the files for a single language (autoencoder)
+    The data is split into X data, with a determined random state and test size (see constants) to be reproducible
+    And the language is loaded from the language file
+    :param lang_path: The path to the language file (containing the language for X)
+    :return: Tuple of X_train, Language object for the input language
+    """
+    assert isinstance(lang_path, Path), f"lang_path must be a string or a Path object"
+    assert lang_path.exists(), f"Language path {lang_path} does not exist, please provide a valid path"
+
+    x_path = lang_path / 'X.npy'
+    l_path = lang_path / 'lang.json'
+
+    assert x_path.exists(), f"X path {x_path} does not exist"
+    assert l_path.exists(), f"Language path {l_path} does not exist"
+
+    X, lang_input = Language.load_data_1_lang(x_path, l_path)
+
+    X_train, X_dev_test = train_test_split(
+        X,
+        test_size=1 - TRAIN_PART,
+        random_state=RANDOM_STATE,
+        shuffle=SHUFFLE
+    )
+
+    X_dev, X_test = train_test_split(
+        X_dev_test,
+        test_size=DEV_TEST_RATIO,
+        random_state=RANDOM_STATE,
+        shuffle=SHUFFLE
+    )
+
+    return X_train, X_dev, X_test, lang_input
+
+
 
 def extract_test_data(
         x_path: Union[str, Path] = 'X.npy',
@@ -678,6 +885,33 @@ def extract_test_data(
 
     for i in range(len(X_test)):
         buf.write(f"{lang_input.sentence_from_indices(X_test[i])}\t{lang_output.sentence_from_indices(y_test[i])}\n")
+
+    if isinstance(buf, StringIO):
+        return buf.getvalue()
+
+    buf.close()
+    return None
+
+
+def extract_test_data_1_lang(
+        x_path: Union[str, Path] = 'X.npy',
+        lang_path: Union[str, Path] = 'lang.json',
+        test_save_path: Optional[Union[str, Path]] = None
+) -> Optional[str]:
+    X_train, X_dev, X_test, lang_input = read_date_1_lang(x_path, lang_path)
+
+    if test_save_path is not None:
+        if isinstance(test_save_path, str):
+            test_save_path = Path(test_save_path)
+        elif not isinstance(test_save_path, Path):
+            raise ValueError("test_save_path must be a string or a Path object")
+
+        buf = test_save_path.open(mode="w", encoding="utf-8")
+    else:
+        buf = StringIO()
+
+    for i in range(len(X_test)):
+        buf.write(f"{lang_input.sentence_from_indices(X_test[i])}\n")
 
     if isinstance(buf, StringIO):
         return buf.getvalue()
@@ -727,6 +961,16 @@ if __name__ == '__main__':
     json_ = True
     lang_input = Path("../../data_metrique_strophe.json")
 
+    vocabulary = {
+        *{
+            f"{i}F": i for i in range(1,21)
+        }
+        , *{
+            f"{i}M": i for i in range(1,21)
+        }
+    }
+    vocabulary = sorted(vocabulary, key=lambda x: int(x[:-1]) if x[-1] in {'F', 'M'} else 0)
+
     (
         root_dir,
         relative_to_root,
@@ -739,6 +983,36 @@ if __name__ == '__main__':
         model_root
     ) = BaseModel.solve_paths()
 
-    X, y, l1, l2 = Language.read_data_from_json(lang_input, max_length=max_lenth, l1_sep=input_sep, l2_sep=l2_sep)
+    # X, y, l1, l2 = Language.read_data_from_json(lang_input, max_length=max_lenth, l1_sep=input_sep, l2_sep=l2_sep)
+    #
+    # Language.save_data(X, y, l1, l2, lang_path=lang_root / "metrique_strophe2", overwrite=True)
 
-    Language.save_data(X, y, l1, l2, lang_path=lang_root / "metrique_strophe2", overwrite=True)
+    # X, l1 = Language.read_data_from_json_1_lang(
+    #     data_path=lang_input,
+    #     max_length=max_lenth,
+    #     l_sep=l2_sep,
+    #     which_lang=2,
+    #     extra_vocab=vocabulary
+    # )
+    # Language.save_data_1_lang(
+    #     X,
+    #     l1,
+    #     lang_path=lang_root / "metrique_strophe_ae",
+    #     overwrite=True
+    # )
+    X, y, l1, l2 = Language.read_data_from_json(
+        data_path=lang_input,
+        max_length=max_lenth,
+        l1_sep=input_sep,
+        l2_sep=l2_sep,
+        extra_vocab=([], vocabulary),
+    )
+
+    Language.save_data(
+        X,
+        y,
+        l1,
+        l2,
+        lang_path=lang_root / "metrique_strophe_2",
+        overwrite=True
+    )
