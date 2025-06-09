@@ -132,6 +132,16 @@ def cli():
         "--with_profiler", action="store_true",
         help="Enable profiling of training and evaluation"
     )
+    parser.add_argument(
+        "--single_lang", action="store_true",
+        help="Use single language mode (autoencoder)"
+    )
+    parser.add_argument(
+        "--get_partial_forward", action="store_true",
+        help="Get the partial forward pass of the model as an output (useful for autoencoders or similar models)"
+        "\nThe output will be the encoder output of the model."
+        "\nThis functionality is not available for autoencoder models"
+    )
 
     parsed, unknown = parser.parse_known_args()
     print("Parsed arguments:", parsed)
@@ -181,6 +191,8 @@ def cli():
         datetime_str=parsed.datetime_str,
         default_to_latest=parsed.default_to_latest,
         with_profiler=parsed.with_profiler,
+        single_lang=parsed.single_lang,
+        get_partial_forward=parsed.get_partial_forward,
     )
     print(f"Done ! Took {pretty_time(ns() - start_time)}")
 

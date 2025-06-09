@@ -4,17 +4,18 @@
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import torch
 
 try:
-    from .Language import Language, read_data
-    from .eval import random_predict, do_full_eval
+    from .Language import Language, read_data, read_data_1_lang
+    from .eval import random_predict, do_full_eval, get_partial_output
     from .models import models
     from .train import auto_train
     from .profiler import profiler_wrapper
 except ImportError:
-    from vers_models.Language import Language, read_data
-    from vers_models.eval import random_predict, do_full_eval
+    from vers_models.Language import Language, read_data, read_data_1_lang
+    from vers_models.eval import random_predict, do_full_eval, get_partial_output
     from vers_models.models import models
     from vers_models.train import auto_train
     from vers_models.profiler import profiler_wrapper
@@ -31,6 +32,7 @@ def main(
         lang_name: str = "",
         make_lang: bool = False,
         overwrite_lang: bool = False,
+        single_lang: bool = False,
 
         full_eval: bool = False,
         nb_predictions: int = 10,
@@ -41,8 +43,9 @@ def main(
         datetime_str: str = None,
         default_to_latest: bool = True,
         with_profiler: bool = False,
-):
 
+        get_partial_forward: bool = False,
+):
     train_func = profiler_wrapper(auto_train, profile_=with_profiler)
     full_eval_func = profiler_wrapper(do_full_eval, profile_=with_profiler)
     random_eval_func = profiler_wrapper(random_predict, profile_=with_profiler)
@@ -72,12 +75,16 @@ def main(
         lang_input = Path(lang_input)
         assert lang_input.exists(), f"lang_input {lang_input} does not exist"
 
-        if lang_input.suffix == ".json":
+        if single_lang:
+            X, l1 = Language.read_data_from_json_1_lang(lang_input)
+            y, l2 = X, l1  # In single language mode, input and output are the same
+            Language.save_data_1_lang(X, l1, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
+        elif lang_input.suffix == ".json":
             X, y, l1, l2 = Language.read_data_from_json(lang_input)
+            Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
         else:
             X, y, l1, l2 = Language.read_data_from_txt(lang_input)
-
-        Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
+            Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
 
     if do_train:
         model_args["pretrained"] = False
@@ -90,6 +97,7 @@ def main(
                 batch_size=batch_size,
                 min_batch_size=min_batch_size,
                 max_batch_size=max_batch_size,
+                single_lang=single_lang,
             )
 
         model.save()
@@ -101,11 +109,24 @@ def main(
             default_to_latest=default_to_latest,
             device=device
         )
-        X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = \
-            read_data(lang_path=lang_root / lang_name)
+        if single_lang:
+            X_train, X_dev, X_test, lang_input = read_data_1_lang(lang_root / lang_name)
+            y_train, y_dev, y_test, lang_output = X_train, X_dev, X_test, lang_input  # In single language mode, input and output are the same
+        else:
+            X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output = \
+                read_data(lang_path=lang_root / lang_name)
         print("Model, data, and parameters loaded successfully")
 
     if full_eval:
         full_eval_func(X_dev, y_dev, lang_input, lang_output, model, batch_size)
     else:
         random_eval_func(X_dev, y_dev, lang_input, lang_output, model, batch_size, nb_predictions=nb_predictions)
+
+    if get_partial_forward:
+        get_partial_output(
+            model,
+            np.concatenate((X_train, X_dev)),
+            np.concatenate((y_train, y_dev)),
+            batch_size
+        )
+
