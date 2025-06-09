@@ -6,10 +6,14 @@ from random import sample
 from statistics import mean
 from typing import List, Optional, Tuple
 
+import numpy
 from jiwer import process_words, visualize_alignment
 from tqdm.auto import tqdm
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+from numpy.lib.format import open_memmap
+import polars as pl
 
 try:
     import cowsay
@@ -30,6 +34,7 @@ def align_words(ref, hyp):
     if ref == hyp:
         return None, 0
 
+    # print(ref, hyp)
     computed = process_words([ref], [hyp], dont, dont)
     alignement = visualize_alignment(computed, show_measures=False)
     _, ref, hyp, *_ = multi_stars.sub("@", alignement).split("\n")
@@ -287,3 +292,41 @@ def do_full_eval(X_test, y_test, lang_input, lang_output, model, batch_size):
     df.write_json(model.eval_path.with_suffix(".json"))
 
     return df
+
+def get_partial_output(model, X, y, batch_size, convinience=True):
+    model.eval()
+
+    # Prepare input tensor and DataLoader
+    X_tensor = torch.tensor(X, dtype=torch.long, device=model.device)
+    dataset = TensorDataset(X_tensor)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    n_samples = len(X)
+    start_idx = 0
+    memmap: Optional[np.memmap] = None
+
+
+    with torch.inference_mode():
+        for batch in tqdm(loader, desc="Computing latent representations", unit="batch"):
+            src = batch[0]  # [batch, seq_len]
+            encoder_output = model.partial_forward(src)  # [batch, seq_len, latent_dim]
+            arr = encoder_output.cpu().numpy()
+            if memmap is None:
+                memmap = open_memmap(str(model.latent_path), mode='w+', dtype=arr.dtype,
+                                     shape=(n_samples, arr.shape[1], arr.shape[2]))
+            end_idx = start_idx + arr.shape[0]
+            memmap[start_idx:end_idx] = arr
+            start_idx = end_idx
+
+    # Ensure data is written to disk
+    memmap.flush()
+    print(memmap.shape, X.shape, y.shape)
+    print(f"Latent representations saved to {model.latent_path}")
+
+    if convinience:
+        np.save(model.latent_path.parent / f"{model.latent_path.stem}_X.npy", X)
+        np.save(model.latent_path.parent / f"{model.latent_path.stem}_y.npy", y)
+        print(f"Input data and labels saved to {model.latent_path.stem}_X.npy and {model.latent_path.stem}_y.npy for convinience.")
+
+    return model.latent_path
+
