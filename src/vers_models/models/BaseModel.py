@@ -5,7 +5,7 @@ import json
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any, Set, Union, Iterable
+from typing import Optional, Any, Set, Union, Iterable, Type
 
 import torch
 from numpy import ndarray
@@ -118,6 +118,7 @@ class BaseModel(ABC, nn.Module):
         self.eval_dir = self.eval_root
         assert self.eval_dir.exists(), f"Eval directory {self.eval_dir} {clone_repo}"
         self.eval_path = self.eval_dir / f"{self.cls_name}_{self.start_datetime_str}.json"
+        self.latent_path = self.eval_dir / f"{self.cls_name}_{self.start_datetime_str}_latents.npy"
         self.errors_dir = self.errors_root
         assert self.errors_dir.exists(), f"Errors directory {self.errors_dir} {clone_repo}"
         self.logs_dir = self.logs_root
@@ -222,6 +223,7 @@ class BaseModel(ABC, nn.Module):
         self.relative_to_root: int = None
         self.lang_dir: Path = None
         self.eval_dir: Path = None
+        self.latent_path: Path = None
         self.eval_path: Path = None
         self.errors_dir: Path = None
         self.logs_dir: Path = None
@@ -358,8 +360,32 @@ class BaseModel(ABC, nn.Module):
             return torch.tensor(src, dtype=torch.long, device=self.device)
         elif isinstance(src, Tensor):
             return src.to(self.device)
+            # return torch.tensor(src, dtype=torch.long, device=self.device)
         else:
             raise TypeError("src must be a numpy array, list, or torch tensor")
+
+    def to(self, device: Union[str, torch.device]) -> Type["BaseModel"]:
+        """
+        Move the model to the specified device.
+        :param device: The device to move the model to.
+        :return: The model itself.
+        """
+        self.device = torch.device(device)
+        super().to(device)
+        # if self.optimizer is not None:
+        #     self.optimizer = self.optimizer.to(self.device)
+        # if self.criterion is not None:
+        #     self.criterion = self.criterion.to(self.device)
+        return self
+
+    @abstractmethod
+    def partial_forward(self, src:Tensor) -> Tensor:
+        """
+        Perform a forward pass on the source tensor only, typically used for encoder-only models.
+        :param src: The source tensor.
+        :return: The output tensor.
+        """
+        raise NotImplementedError("Partial forward method not implemented")
 
     @abstractmethod
     def forward(self, src:Tensor, trg:Tensor) -> Tensor:
@@ -413,4 +439,5 @@ class BaseModel(ABC, nn.Module):
         if not list(self.model_dir.iterdir()):
             self.model_dir.rmdir()
         if not list(self.checkpoints_dir.iterdir()):
+
             self.checkpoints_dir.rmdir()
