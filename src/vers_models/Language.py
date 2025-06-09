@@ -5,7 +5,7 @@ import json
 from io import StringIO
 from re import Pattern, compile, escape
 from pathlib import Path
-from typing import Tuple, Optional, List, Union
+from typing import Tuple, Optional, List, Union, Iterable
 from collections.abc import Collection, MutableMapping
 from unicodedata import normalize
 
@@ -290,6 +290,7 @@ class Language:
             pairs_sep: str = "\t",
             instance_sep: str = "\n",
             from_lang: Optional[Path] = None,
+            extra_vocab: Optional[Iterable[Collection[str]]] = None,
     ) -> Tuple[np.array, np.array, "Language", "Language"]:
         """
         Function to read data from a txt file
@@ -337,6 +338,13 @@ class Language:
             l1.sep = l1_sep
             l2.sep = l2_sep
 
+        if extra_vocab is not None:
+            for token in extra_vocab[0]:
+                l1.add_token(token)
+
+            for token in extra_vocab[1]:
+                l2.add_token(token)
+
         for pair in pairs:
             l1.add_sentence(pair[0])
             l2.add_sentence(pair[1])
@@ -374,6 +382,7 @@ class Language:
             max_length=1000,
             l1_sep = None,
             l2_sep = None,
+            extra_vocab: Optional[Iterable[Collection[str]]] = None,
     ) -> Tuple[np.array, np.array, "Language", "Language"]:
         """
         Function to read data from a json file
@@ -396,6 +405,13 @@ class Language:
 
         l1 = cls('1', sep=l1_sep)
         l2 = cls('2', sep=l2_sep)
+
+        if extra_vocab is not None:
+            for token in extra_vocab[0]:
+                l1.add_token(token)
+
+            for token in extra_vocab[1]:
+                l2.add_token(token)
 
         if isinstance(pairs, dict):
             pairs = [
