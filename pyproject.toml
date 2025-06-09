@@ -30,6 +30,7 @@ dependencies = [
     "scikit-learn",
     "tqdm",
     "jiwer",
+    "kaleido",
 ]
 
 [project.urls]
@@ -69,3 +70,4 @@ exclude_lines = [
 [project.scripts]
 vers = "vers_models.cli:cli"
 vers-models = "vers_models.cli:cli"
+
