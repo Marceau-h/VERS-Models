@@ -96,6 +96,18 @@ class Transfo(BaseModel):
         seq_len = tgt.size(1)
         return self.transformer.generate_square_subsequent_mask(seq_len).to(tgt.device)
 
+    def partial_forward(self, src:Tensor) -> Tensor:
+        """
+        Return encoder memory as latent representation for given input sequence.
+        """
+        self.eval()
+        with torch.inference_mode():
+            # src: [batch, seq_len]
+            src_mask = self.make_src_key_padding_mask(src)
+            embed_src = self.pos_encoder(self.src_tok_embed(src))
+            memory = self.transformer.encoder(embed_src, src_key_padding_mask=src_mask)
+        return memory
+
     def forward(self, src: Tensor, tgt: Tensor) -> Tensor:
         src_mask = self.make_src_key_padding_mask(src)
         tgt_mask = self.make_src_key_padding_mask(tgt)

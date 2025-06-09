@@ -61,6 +61,17 @@ class S2SNoAttn(BaseModel):
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)
 
+    def partial_forward(self, src:Tensor) -> Tensor:
+        """
+        Return the encoder outputs as latent representation for given input sequence.
+        """
+        self.eval()
+        with torch.inference_mode():
+            # src: [batch, seq_len]
+            embedded_src = self.encoder_embedding(src)
+            encoder_outputs, (_hidden, _cell) = self.encoder_lstm(embedded_src)
+        return encoder_outputs
+
     def forward(self, src:Tensor, trg:Tensor) -> Tensor:
         batch_size, trg_len = trg.size()
         trg_vocab_size = self.fc.out_features
