@@ -311,6 +311,7 @@ def get_partial_output(model, X, y, batch_size, convinience=True):
             src = batch[0]  # [batch, seq_len]
             encoder_output = model.partial_forward(src)  # [batch, seq_len, latent_dim]
             arr = encoder_output.cpu().numpy()
+            # print(arr.shape, start_idx, n_samples)
             if memmap is None:
                 memmap = open_memmap(str(model.latent_path), mode='w+', dtype=arr.dtype,
                                      shape=(n_samples, arr.shape[1], arr.shape[2]))

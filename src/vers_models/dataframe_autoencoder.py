@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: 2025-present Marceau <git@marceau-h.fr>
 # SPDX-License-Identifier: AGPL-3.0-or-later
-import numpy as np
-from typing import Union, List
 from pathlib import Path
+from typing import Union, List
 
+import numpy as np
+import polars as pl
 import torch
 from torch import nn, Tensor
 from torch.utils.data import DataLoader, TensorDataset, Dataset, Subset
@@ -11,10 +12,10 @@ from tqdm.auto import trange
 import plotly.express as px
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-import polars as pl
 
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cuda.matmul.allow_tf32 = True
+SEED = 42
 
 
 class DFVAE(nn.Module):
@@ -312,6 +313,7 @@ def main(
     indices = np.arange(n)
 
     if shuffle:
+        np.random.seed(SEED)
         np.random.shuffle(indices)
 
     if y_paths is not None:
@@ -352,24 +354,26 @@ def main(
 
 if __name__ == '__main__':
     paths = [
-        Path('../../evals/S2SNoAttn_2025-06-08_22-37-40_latents.npy'),
+        Path('../../evals/S2SNoAttn_2025-06-10_13-54-51_latents.npy'),
     ]
     y_paths = [
-        Path('../../evals/S2SNoAttn_2025-06-08_22-37-40_latents_y.npy'),
+        Path('../../evals/S2SNoAttn_2025-06-10_13-54-51_latents_y.npy'),
     ]
+
     test_size: float = 0.2
     shuffle: bool = True
-    model_path: Path = Path('dfvae_model.pth')
-    train_codes_path: Path = Path('train_codes.npy')
-    test_codes_path: Path = Path('test_codes.npy')
-    permutation_path: Path = Path('permutation.npy')
-    epochs: int = 100
-    batch_size: int = 3000
+    model_path: Path = Path('dfvae_model2.pth')
+    train_codes_path: Path = Path('train_codes2.npy')
+    test_codes_path: Path = Path('test_codes2.npy')
+    permutation_path: Path = Path('permutation2.npy')
+    epochs: int = 1
+    batch_size: int = 700
 
-    hidden_dim: int = 64
-    latent_dim: int = 32
+    hidden_dim: int = 128
+    latent_dim: int = 16
     num_layers: int = 1
     lr: float = 1e-3
+
     main(
         paths=paths,
         y_paths=y_paths,
