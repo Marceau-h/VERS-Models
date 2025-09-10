@@ -32,10 +32,10 @@ class S2SNoAttn(BaseModel):
         # Encoder components
         self.encoder_embedding = nn.Embedding(
             self.input_size,
-            self.output_size,
+            self.embed_size,  # Fixed: should be embed_size, not output_size
         )
         self.encoder_lstm = nn.LSTM(
-            self.output_size,
+            self.embed_size,  # Fixed: should be embed_size to match embedding output
             self.hidden_size,
             num_layers=self.num_layers,
             bidirectional=True,
@@ -207,4 +207,83 @@ class S2SNoAttn(BaseModel):
                 evals.append(eval_fn(**eval_args))
 
         return self, losses, evals
+
+    def finetune(
+            self,
+            new_input_lang: Language,
+            new_output_lang: Language,
+            preserve_weights: bool = True,
+            init_std: float = 0.1
+    ):
+        """
+        Fine-tune the model for new languages by adjusting layer sizes and preserving weights.
+        All tokens from the original language will be preserved with their original IDs.
+        """
+        if not preserve_weights:
+            # If not preserving weights, just update sizes and reinitialize
+            self.input_size = new_input_lang.n_tokens
+            self.output_size = new_output_lang.n_tokens
+            self.params["input_size"] = self.input_size
+            self.params["output_size"] = self.output_size
+            
+            # Reinitialize layers with new sizes
+            self.encoder_embedding = nn.Embedding(self.input_size, self.embed_size).to(self.device)
+            self.decoder_embedding = nn.Embedding(self.output_size, self.embed_size).to(self.device)
+            self.fc = nn.Linear(self.hidden_size * 2, self.output_size).to(self.device)
+            return self
+        
+        # Merge vocabularies to preserve old token IDs
+        merged_input_lang = new_input_lang
+        merged_output_lang = new_output_lang
+        
+        if hasattr(self, '_current_input_lang') and self._current_input_lang is not None:
+            merged_input_lang = self._merge_vocabularies(self._current_input_lang, new_input_lang)
+        
+        if hasattr(self, '_current_output_lang') and self._current_output_lang is not None:
+            merged_output_lang = self._merge_vocabularies(self._current_output_lang, new_output_lang)
+        
+        # Create vocabulary mappings with merged vocabularies
+        if hasattr(self, '_current_input_lang') and self._current_input_lang is not None:
+            input_mapping = self._create_vocab_mapping(self._current_input_lang, merged_input_lang)
+        else:
+            # Create identity mapping for indices that exist in both vocabularies
+            min_size = min(self.input_size, merged_input_lang.n_tokens)
+            input_mapping = {i: i for i in range(min_size)}
+        
+        if hasattr(self, '_current_output_lang') and self._current_output_lang is not None:
+            output_mapping = self._create_vocab_mapping(self._current_output_lang, merged_output_lang)
+        else:
+            # Create identity mapping for indices that exist in both vocabularies
+            min_size = min(self.output_size, merged_output_lang.n_tokens)
+            output_mapping = {i: i for i in range(min_size)}
+        
+        # Get current and new sizes
+        old_input_size = self.input_size
+        old_output_size = self.output_size
+        new_input_size = merged_input_lang.n_tokens
+        new_output_size = merged_output_lang.n_tokens
+        
+        # Only resize if new vocabulary is larger
+        if new_input_size > old_input_size:
+            self.encoder_embedding = self._resize_embedding_layer(
+                self.encoder_embedding, new_input_size, input_mapping, init_std
+            )
+            self.input_size = new_input_size
+            self.params["input_size"] = self.input_size
+        
+        if new_output_size > old_output_size:
+            self.decoder_embedding = self._resize_embedding_layer(
+                self.decoder_embedding, new_output_size, output_mapping, init_std
+            )
+            
+            self.fc = self._resize_linear_layer(
+                self.fc, new_output_size, output_mapping, init_std
+            )
+            self.output_size = new_output_size
+            self.params["output_size"] = self.output_size
+        
+        # Update current language references with merged languages
+        self.set_current_languages(merged_input_lang, merged_output_lang)
+        
+        return self
 

@@ -355,6 +355,51 @@ class BaseModel(ABC, nn.Module):
 
         return model, params, model_dir
 
+    @classmethod
+    def load_with_languages(
+            cls,
+            /,
+            lang_name: str,
+            input_lang: "Language",
+            output_lang: "Language", 
+            *args,
+            datetime_str: Optional[str] = None,
+            default_to_latest: bool = True,
+            device: Optional[Union[str, torch.device]] = None,
+            **kwargs
+    ) -> tuple[type["BaseModel"], dict[str, Any], Path]:
+        """
+        Load the model and automatically set the current languages for fine-tuning.
+        
+        :param lang_name: The language name to load the model for.
+        :param input_lang: The input language object
+        :param output_lang: The output language object
+        :param datetime_str: The datetime string to load the model from.
+        :param default_to_latest: If True, load the latest model if datetime_str is not provided.
+        :param device: The device to load the model on. If None, tries to use cuda.
+        :return: The loaded model with languages set, the state and the model directory.
+        """
+        model, params, model_dir = cls.load(
+            lang_name, *args, datetime_str=datetime_str, 
+            default_to_latest=default_to_latest, device=device, **kwargs
+        )
+        
+        # Set the current languages for proper fine-tuning
+        model.set_current_languages(input_lang, output_lang)
+        
+        return model, params, model_dir
+
+    def set_current_languages(self, input_lang: "Language", output_lang: "Language"):
+        """
+        Set the current input and output languages for the model.
+        This is needed for proper vocabulary mapping during fine-tuning.
+        
+        :param input_lang: Current input language
+        :param output_lang: Current output language
+        """
+        self._current_input_lang = input_lang
+        self._current_output_lang = output_lang
+
     def to_tensor(self, src:Union[ndarray, list, Tensor]) -> Tensor:
         if isinstance(src, (ndarray, list)):
             return torch.tensor(src, dtype=torch.long, device=self.device)
@@ -385,6 +430,169 @@ class BaseModel(ABC, nn.Module):
                 tensor[mask] = lang.UNK_ID
 
         return tensor
+
+
+    def _merge_vocabularies(self, old_lang: "Language", new_lang: "Language") -> "Language":
+        """
+        Merge vocabularies by building upon the old language and extending it with new tokens.
+        All old tokens keep their original IDs, and new tokens from new_lang are added after.
+        
+        :param old_lang: Original language vocabulary (will be extended with new tokens)
+        :param new_lang: New language vocabulary (new tokens will be added from this)
+        :return: Extended language object based on old_lang
+        """
+        # Check if the new language already contains all old language tokens in the right order
+        # This happens when the new language is the same as the old one or was built from the old one
+        if new_lang.n_tokens >= old_lang.n_tokens:
+            
+            for i in range(old_lang.n_tokens):
+                if (
+                    i not in new_lang.index2token 
+                    or new_lang.index2token[i] != old_lang.index2token[i]
+                ):
+                        break
+            else:
+                # No merge needed - the new language already contains all old tokens in correct order
+                return new_lang
+        
+        # Create a new language object based on the old language
+        merged_lang = Language(old_lang.name, old_lang.sep)
+        
+        # Copy all attributes from the old language
+        merged_lang.token2index = old_lang.token2index.copy()
+        merged_lang.index2token = old_lang.index2token.copy() 
+        merged_lang.token2count = old_lang.token2count.copy()
+        merged_lang.n_tokens = old_lang.n_tokens
+        merged_lang.max_length = old_lang.max_length
+        
+        # Add any new tokens from new_lang that aren't already in the old vocabulary
+        for token in new_lang.token2index.keys():
+            if token not in merged_lang.token2index:
+                # Add new token with the next available index
+                merged_lang.token2index[token] = merged_lang.n_tokens
+                merged_lang.index2token[merged_lang.n_tokens] = token
+                # Use count from new language if available, otherwise set to 1
+                if token in new_lang.token2count:
+                    merged_lang.token2count[token] = new_lang.token2count[token]
+                else:
+                    merged_lang.token2count[token] = 1
+                # Increment n_tokens for each new token added
+                merged_lang.n_tokens += 1
+        
+        # Keep the biggest max_length between the two languages
+        merged_lang.max_length = max(old_lang.max_length, new_lang.max_length)
+        
+        return merged_lang
+
+    def _create_vocab_mapping(self, old_lang: "Language", new_lang: "Language") -> dict:
+        """
+        Create a mapping from old vocabulary indices to new vocabulary indices.
+        Now creates an identity mapping since vocabularies are merged to preserve old IDs.
+        
+        :param old_lang: Original language vocabulary
+        :param new_lang: New language vocabulary (should be merged with old_lang)
+        :return: Dictionary mapping old indices to new indices
+        """
+        mapping = {}
+        for old_idx, token in old_lang.index2token.items():
+            if token in new_lang.token2index:
+                mapping[old_idx] = new_lang.token2index[token]
+            # If token doesn't exist in new vocabulary, it will be unmapped (lost)
+        return mapping
+
+    def _resize_embedding_layer(
+            self, 
+            embedding_layer: nn.Embedding, 
+            new_vocab_size: int, 
+            vocab_mapping: dict,
+            init_std: float = 0.1
+    ) -> nn.Embedding:
+        """
+        Resize an embedding layer to accommodate a new vocabulary size.
+        
+        :param embedding_layer: Original embedding layer
+        :param new_vocab_size: New vocabulary size
+        :param vocab_mapping: Mapping from old indices to new indices
+        :param init_std: Standard deviation for initializing new embeddings
+        :return: New embedding layer with preserved and new weights
+        """
+        old_vocab_size, embed_dim = embedding_layer.weight.shape
+        
+        if new_vocab_size <= old_vocab_size:
+            # No resizing needed if new vocabulary is not larger
+            return embedding_layer
+            
+        # Create new embedding layer
+        new_embedding = nn.Embedding(new_vocab_size, embed_dim).to(embedding_layer.weight.device)
+        
+        # Initialize new embeddings with normal distribution
+        nn.init.normal_(new_embedding.weight, mean=0.0, std=init_std)
+        
+        # Copy existing weights using the mapping
+        with torch.no_grad():
+            for old_idx, new_idx in vocab_mapping.items():
+                if old_idx < old_vocab_size and new_idx < new_vocab_size:
+                    new_embedding.weight[new_idx] = embedding_layer.weight[old_idx]
+        
+        return new_embedding
+
+    def _resize_linear_layer(
+            self, 
+            linear_layer: nn.Linear, 
+            new_output_size: int, 
+            vocab_mapping: dict,
+            init_std: float = 0.1,
+            resize_input: bool = False
+    ) -> nn.Linear:
+        """
+        Resize a linear layer's output (or input) dimension to accommodate new vocabulary.
+        
+        :param linear_layer: Original linear layer
+        :param new_output_size: New output size (or input size if resize_input=True)
+        :param vocab_mapping: Mapping from old indices to new indices
+        :param init_std: Standard deviation for initializing new weights
+        :param resize_input: Whether to resize input dimension instead of output
+        :return: New linear layer with preserved and new weights
+        """
+        if resize_input:
+            old_size = linear_layer.in_features
+            new_size = new_output_size
+            in_features = new_size
+            out_features = linear_layer.out_features
+        else:
+            old_size = linear_layer.out_features
+            new_size = new_output_size
+            in_features = linear_layer.in_features
+            out_features = new_size
+        
+        if new_size <= old_size:
+            # No resizing needed if new size is not larger
+            return linear_layer
+            
+        # Create new linear layer
+        new_linear = nn.Linear(in_features, out_features).to(linear_layer.weight.device)
+        
+        # Initialize new weights with normal distribution
+        nn.init.normal_(new_linear.weight, mean=0.0, std=init_std)
+        if new_linear.bias is not None:
+            nn.init.normal_(new_linear.bias, mean=0.0, std=init_std)
+        
+        # Copy existing weights using the mapping
+        with torch.no_grad():
+            if resize_input:
+                # Resizing input dimension
+                for old_idx, new_idx in vocab_mapping.items():
+                    if old_idx < old_size and new_idx < new_size:
+                        new_linear.weight[:, new_idx] = linear_layer.weight[:, old_idx]
+            else:
+                # Resizing output dimension
+                for old_idx, new_idx in vocab_mapping.items():
+                    if old_idx < old_size and new_idx < new_size:
+                        new_linear.weight[new_idx] = linear_layer.weight[old_idx]
+                        if new_linear.bias is not None and linear_layer.bias is not None:
+                            new_linear.bias[new_idx] = linear_layer.bias[old_idx]
+        
+        return new_linear
 
 
     def to(self, device: Union[str, torch.device]) -> Type["BaseModel"]:
@@ -431,6 +639,25 @@ class BaseModel(ABC, nn.Module):
             **kwargs,
     ):
         raise NotImplementedError("Train method not implemented")
+
+    @abstractmethod
+    def finetune(
+            self,
+            new_input_lang: "Language",
+            new_output_lang: "Language",
+            preserve_weights: bool = True,
+            init_std: float = 0.1
+    ):
+        """
+        Fine-tune the model for new languages by adjusting layer sizes and preserving weights.
+        
+        :param new_input_lang: New input language with potentially larger vocabulary
+        :param new_output_lang: New output language with potentially larger vocabulary  
+        :param preserve_weights: Whether to preserve existing weights for common vocabulary
+        :param init_std: Standard deviation for initializing new weights
+        :return: Self for method chaining
+        """
+        raise NotImplementedError("Finetune method not implemented")
 
     def __del__(self):
         if not list(self.model_dir.iterdir()):

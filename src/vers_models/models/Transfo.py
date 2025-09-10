@@ -209,3 +209,82 @@ class Transfo(BaseModel):
 
         return self, losses, evals
 
+    def finetune(
+            self,
+            new_input_lang: Language,
+            new_output_lang: Language,
+            preserve_weights: bool = True,
+            init_std: float = 0.1
+    ):
+        """
+        Fine-tune the model for new languages by adjusting layer sizes and preserving weights.
+        All tokens from the original language will be preserved with their original IDs.
+        """
+        if not preserve_weights:
+            # If not preserving weights, just update sizes and reinitialize
+            self.input_size = new_input_lang.n_tokens
+            self.output_size = new_output_lang.n_tokens
+            self.params["input_size"] = self.input_size
+            self.params["output_size"] = self.output_size
+            
+            # Reinitialize layers with new sizes
+            self.src_tok_embed = nn.Embedding(self.input_size, self.embed_size).to(self.device)
+            self.tgt_tok_embed = nn.Embedding(self.output_size, self.embed_size).to(self.device)
+            self.fc_out = nn.Linear(self.embed_size, self.output_size).to(self.device)
+            return self
+        
+        # Merge vocabularies to preserve old token IDs
+        merged_input_lang = new_input_lang
+        merged_output_lang = new_output_lang
+        
+        if hasattr(self, '_current_input_lang') and self._current_input_lang is not None:
+            merged_input_lang = self._merge_vocabularies(self._current_input_lang, new_input_lang)
+        
+        if hasattr(self, '_current_output_lang') and self._current_output_lang is not None:
+            merged_output_lang = self._merge_vocabularies(self._current_output_lang, new_output_lang)
+        
+        # Create vocabulary mappings with merged vocabularies
+        if hasattr(self, '_current_input_lang') and self._current_input_lang is not None:
+            input_mapping = self._create_vocab_mapping(self._current_input_lang, merged_input_lang)
+        else:
+            # Create identity mapping for indices that exist in both vocabularies
+            min_size = min(self.input_size, merged_input_lang.n_tokens)
+            input_mapping = {i: i for i in range(min_size)}
+        
+        if hasattr(self, '_current_output_lang') and self._current_output_lang is not None:
+            output_mapping = self._create_vocab_mapping(self._current_output_lang, merged_output_lang)
+        else:
+            # Create identity mapping for indices that exist in both vocabularies
+            min_size = min(self.output_size, merged_output_lang.n_tokens)
+            output_mapping = {i: i for i in range(min_size)}
+        
+        # Get current and new sizes
+        old_input_size = self.input_size
+        old_output_size = self.output_size
+        new_input_size = merged_input_lang.n_tokens
+        new_output_size = merged_output_lang.n_tokens
+        
+        # Only resize if new vocabulary is larger
+        if new_input_size > old_input_size:
+            self.src_tok_embed = self._resize_embedding_layer(
+                self.src_tok_embed, new_input_size, input_mapping, init_std
+            )
+            self.input_size = new_input_size
+            self.params["input_size"] = self.input_size
+        
+        if new_output_size > old_output_size:
+            self.tgt_tok_embed = self._resize_embedding_layer(
+                self.tgt_tok_embed, new_output_size, output_mapping, init_std
+            )
+            
+            self.fc_out = self._resize_linear_layer(
+                self.fc_out, new_output_size, output_mapping, init_std
+            )
+            self.output_size = new_output_size
+            self.params["output_size"] = self.output_size
+        
+        # Update current language references with merged languages
+        self.set_current_languages(merged_input_lang, merged_output_lang)
+        
+        return self
+
