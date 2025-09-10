@@ -356,6 +356,8 @@ def cli():
                 raise ValueError(
                     f"The input file does not contain the specified column '{parsed.input_file_col}'"
                     "\nPlease check the column name and reflect it with `--input_file_col`"
+                    "\nThe current file columns are :"
+                    f"\n{', '.join(user_df.columns)}"
                 )
     if parsed.input is not None:
         collected = prompt_user(parsed.input)
