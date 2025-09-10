@@ -360,9 +360,32 @@ class BaseModel(ABC, nn.Module):
             return torch.tensor(src, dtype=torch.long, device=self.device)
         elif isinstance(src, Tensor):
             return src.to(self.device)
-            # return torch.tensor(src, dtype=torch.long, device=self.device)
         else:
             raise TypeError("src must be a numpy array, list, or torch tensor")
+
+    def handle_unknown_tokens(self, src:Union[ndarray, list, Tensor], lang:Language) -> Tensor:
+        """
+        Checks for tokens not in the vocabulary and replaces them with the UNK token
+        :param src: Input tensor or array with token indices
+        :param lang: Language object for the input
+        :return: Tensor with unknown tokens replaced by UNK_ID
+        """
+        tensor = self.to_tensor(src)
+
+        # Create mask for tokens that exceed the vocabulary size
+        if tensor.dim() == 1:
+            mask = tensor >= lang.n_tokens
+            if mask.any():
+                print(f"Warning: Found unknown tokens in input: {tensor[mask].tolist()}")
+                tensor[mask] = lang.UNK_ID
+        else:  # For batches
+            mask = tensor >= lang.n_tokens
+            if mask.any():
+                print(f"Warning: Found {mask.sum().item()} unknown tokens in batch")
+                tensor[mask] = lang.UNK_ID
+
+        return tensor
+
 
     def to(self, device: Union[str, torch.device]) -> Type["BaseModel"]:
         """

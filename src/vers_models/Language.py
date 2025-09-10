@@ -23,6 +23,8 @@ EOS_ID = 1
 EOS_TOKEN = 'EOS'
 PAD_ID = 2
 PAD_TOKEN = 'PAD'
+UNK_ID = 3
+UNK_TOKEN = 'UNK'
 
 assert .999 < sum(TRAIN_DEV_TEST_SPLIT) < 1.001, f"TRAIN_DEV_TEST_SPLIT must sum to 1, got {sum(TRAIN_DEV_TEST_SPLIT)}"
 TRAIN_PART = TRAIN_DEV_TEST_SPLIT[0]
@@ -98,6 +100,8 @@ class Language:
     EOS_TOKEN = EOS_TOKEN
     PAD_ID = PAD_ID
     PAD_TOKEN = PAD_TOKEN
+    UNK_ID = UNK_ID
+    UNK_TOKEN = UNK_TOKEN
 
     def __init__(self, name: str, sep: Optional[Union[str, List[str]]] = None) -> None:
         self.name: str = name
@@ -105,7 +109,8 @@ class Language:
             {
                 self.SOS_TOKEN: self.SOS_ID,
                 self.EOS_TOKEN: self.EOS_ID,
-                self.PAD_TOKEN: self.PAD_ID
+                self.PAD_TOKEN: self.PAD_ID,
+                self.UNK_TOKEN: self.UNK_ID
             },
             key_type=str,
             value_type=int
@@ -119,17 +124,34 @@ class Language:
             {
                 self.SOS_ID: self.SOS_TOKEN,
                 self.EOS_ID: self.EOS_TOKEN,
-                self.PAD_ID: self.PAD_TOKEN
+                self.PAD_ID: self.PAD_TOKEN,
+                self.UNK_ID: self.UNK_TOKEN
             },
             key_type=int,
             value_type=str
         )
 
-        self.n_tokens: int = 3
+        self.n_tokens: int = 4
         self.max_length: int = 0
         self.sep: Optional[Union[str, List[str]]] = sep
         self.re_sep: Optional[str] = None
         self.re_sep_compiled: Optional[Pattern] = None
+
+    def itoken(self, index: int) -> str:
+        """
+        Function to get the token from the index
+        :param index: index to get the token from
+        :return: token corresponding to the index
+        """
+        return self.index2token.get(index, self.UNK_TOKEN)
+
+    def tindex(self, token: str) -> int:
+        """
+        Function to get the index from the token
+        :param token: token to get the index from
+        :return: index corresponding to the token
+        """
+        return self.token2index.get(token, self.UNK_ID)
 
     @staticmethod
     def normalize(s: str) -> str:
@@ -228,7 +250,7 @@ class Language:
         """
         return (
                 [self.SOS_ID]
-                + [self.token2index[token] for token in self.sent_iter(sentence)]
+                + [self.tindex(token) for token in self.sent_iter(sentence)]
                 + [self.EOS_ID]
                 + [self.PAD_ID] * (self.max_length - self.sent_len(sentence))
         )
@@ -240,7 +262,7 @@ class Language:
         :return: sentence
         """
         return self.sent_uniter(
-            [self.index2token[index]
+            [self.itoken(index)
              for index in indices
              if index not in [self.SOS_ID, self.EOS_ID, self.PAD_ID]]
         )
@@ -260,24 +282,17 @@ class Language:
             indices = indices[np.newaxis, :]
 
         temp = [
-        [
-            self.index2token[idx]
-            if idx in self.index2token
-            else f"<UNK_{idx}>"
-            for idx in row
-            if idx not in {self.PAD_ID}
-        ]
-        for row in indices
+            [
+                self.itoken(idx)
+                for idx in row
+                if idx not in {self.PAD_ID}
+            ]
+            for row in indices
         ]
 
-        if any(s.startswith("<UNK_") for ls in temp for s in ls):
-            raise ValueError(
-                "Some indices in the batch do not correspond to any token in the index2token mapping. "
-                "Check if the indices are valid and if the language has been properly initialized.\n"
-                f" Invalid indices found: {[s for ls in temp for s in ls if s.startswith('<UNK_')]}.\n"
-                f"{self.index2token}\n"
-                f"{[s for ls in temp for s in ls if s.startswith('<UNK_')]}"
-            )
+        # if any(s.startswith("<UNK_") for ls in temp for s in ls):
+        #     print(f"Warning: Some indices do not correspond to any token: {[s for ls in temp for s in ls if s.startswith('<UNK_') and s != '<UNK_3>']}")
+
         return temp
 
     @classmethod

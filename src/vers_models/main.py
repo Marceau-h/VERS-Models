@@ -144,24 +144,25 @@ def main(
 
         def predict_one(sentence: str) -> str:
             # Convertir phrase brute en indices
-            try :
+            try:
                 token_ids = (
                         [lang_input_obj.SOS_ID]
                         + [
-                            lang_input_obj.token2index[token]
+                            lang_input_obj.tindex(token)
                             for token in lang_input_obj.sent_iter(sentence)
                         ]
                         + [lang_input_obj.EOS_ID]
                 )
-            except KeyError as e:
-                print(f"Error: token {e} not in vocabulary") #  , cannot process sentence `{sentence}`")
+            except Exception as e:
+                print(f"Error processing sentence: {e}")
                 return None
+
             pred_tokens = model.predict(token_ids, lang_output=lang_output_obj)
             if not isinstance(pred_tokens, list):
                 pred_tokens = list(pred_tokens)
             sep = lang_output_obj.sep if lang_output_obj.sep else " | "
             if isinstance(sep, Iterable):
-                sep  = sep[0]  # type: ignore
+                sep = sep[0]  # type: ignore
             return sep.join(pred_tokens)
 
         outputs = [predict_one(s) for s in raw_inputs]

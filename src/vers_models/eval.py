@@ -49,6 +49,9 @@ def predict(model, input_sentence, lang_input, lang_output):
 
     if torch.is_tensor(input_sentence) and input_sentence.dim() > 1:
         batch = input_sentence.to(model.device)
+        # Handle unknown tokens if the model supports it
+        if hasattr(model, 'handle_unknown_tokens'):
+            batch = model.handle_unknown_tokens(batch, lang_input)
         input_sentence_lst = lang_input.index2token_sent(batch)
         # Predict each sample individually
         predicted_output_lst = [model.predict(row, lang_output=lang_output) for row in batch]
@@ -56,13 +59,20 @@ def predict(model, input_sentence, lang_input, lang_output):
 
     if isinstance(input_sentence, list) and input_sentence and isinstance(input_sentence[0], (list, tuple)):
         batch = torch.tensor(input_sentence, dtype=torch.long, device=model.device)
+        # Handle unknown tokens if the model supports it
+        if hasattr(model, 'handle_unknown_tokens'):
+            batch = model.handle_unknown_tokens(batch, lang_input)
         input_sentence_lst = lang_input.index2token_sent(batch)
         predicted_output_lst = [model.predict(list(seq), lang_output=lang_output) for seq in input_sentence]
         return input_sentence_lst, predicted_output_lst
 
     # Single sequence
+    # Handle unknown tokens if needed
+    if hasattr(model, 'handle_unknown_tokens'):
+        input_sentence = model.handle_unknown_tokens(input_sentence, lang_input)
+
     input_sentence_lst = [
-        lang_input.index2token[token]
+        lang_input.itoken(token)
         for token in input_sentence
         if token != lang_input.PAD_ID
     ]
@@ -330,4 +340,3 @@ def get_partial_output(model, X, y, batch_size, convinience=True):
         print(f"Input data and labels saved to {model.latent_path.stem}_X.npy and {model.latent_path.stem}_y.npy for convinience.")
 
     return model.latent_path
-
