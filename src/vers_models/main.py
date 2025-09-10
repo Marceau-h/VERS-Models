@@ -32,6 +32,7 @@ def main(
 
         lang_input: str = "",
         lang_name: str = "",
+        from_lang: Optional[str] = None,
         make_lang: bool = False,
         overwrite_lang: bool = False,
         single_lang: bool = False,
@@ -86,15 +87,31 @@ def main(
         lang_input_path = Path(lang_input)
         assert lang_input_path.exists(), f"lang_input {lang_input_path} does not exist"
 
+        # Préparer le chemin pour from_lang s'il est spécifié
+        from_lang_path = None
+        if from_lang:
+            from_lang_path = lang_root / from_lang / "lang.json"
+            assert from_lang_path.exists(), f"from_lang path {from_lang_path} does not exist"
+            print(f"Extending language from {from_lang_path}")
+
         if single_lang:
-            X, l1 = Language.read_data_from_json_1_lang(lang_input_path)
+            X, l1 = Language.read_data_from_json_1_lang(
+                lang_input_path,
+                from_lang=from_lang_path
+            )
             y, l2 = X, l1  # single langue = auto-encode
             Language.save_data_1_lang(X, l1, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
         elif lang_input_path.suffix == ".json":
-            X, y, l1, l2 = Language.read_data_from_json(lang_input_path)
+            X, y, l1, l2 = Language.read_data_from_json(
+                lang_input_path,
+                from_lang=from_lang_path
+            )
             Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
         else:
-            X, y, l1, l2 = Language.read_data_from_txt(lang_input_path)
+            X, y, l1, l2 = Language.read_data_from_txt(
+                lang_input_path,
+                from_lang=from_lang_path
+            )
             Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
 
     inference_mode = (user_inputs is not None) or (user_df is not None)

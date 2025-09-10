@@ -220,6 +220,10 @@ def cli():
         help="Name of the language data"
     )
     parser.add_argument(
+        "--from_lang", type=str, default=None,
+        help="Base language name to extend from when making a new language (optional)"
+    )
+    parser.add_argument(
         "--make_lang", action="store_true",
         help="Make language data"
     )
@@ -378,6 +382,7 @@ def cli():
         max_batch_size=parsed.max_batch_size,
         lang_input=parsed.lang_input,
         lang_name=parsed.lang_name,
+        from_lang=parsed.from_lang,
         make_lang=parsed.make_lang,
         overwrite_lang=parsed.overwrite_lang,
         full_eval=parsed.full_eval,

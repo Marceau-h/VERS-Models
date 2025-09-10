@@ -397,6 +397,7 @@ class Language:
             max_length=1000,
             l1_sep = None,
             l2_sep = None,
+            from_lang: Optional[Path] = None,
             extra_vocab: Optional[Iterable[Collection[str]]] = None,
     ) -> Tuple[np.array, np.array, "Language", "Language"]:
         """
@@ -405,7 +406,8 @@ class Language:
         :param max_length: maximum length of a sentence
         :param l1_sep: The separator for the first language
         :param l2_sep: The separator for the second language
-        :param reverse: Whether to reverse the pairs or not (i.e. switch the input and output) (default: True)
+        :param from_lang: Path to an existing language file to extend
+        :param extra_vocab: Optional extra vocabulary to include
         :return: Tuple of X, y, Language object for the input language, Language object for the output language
         """
         if isinstance(data_path, str):
@@ -418,8 +420,21 @@ class Language:
         with data_path.open("r") as f:
             pairs = json.load(f)
 
-        l1 = cls('1', sep=l1_sep)
-        l2 = cls('2', sep=l2_sep)
+        if from_lang is None:
+            l1 = cls('1', sep=l1_sep)
+            l2 = cls('2', sep=l2_sep)
+        else:
+            with open(from_lang, 'r') as f:
+                lang = json.load(f)
+
+            l1 = cls('1')
+            l2 = cls('2')
+
+            l1.restore_lang(lang['1'])
+            l2.restore_lang(lang['2'])
+
+            l1.sep = l1_sep
+            l2.sep = l2_sep
 
         if extra_vocab is not None:
             for token in extra_vocab[0]:
@@ -501,6 +516,7 @@ class Language:
             max_length: int = 1000,
             l_sep: Optional[str] = None,
             which_lang: Optional[int] = None,
+            from_lang: Optional[Path] = None,
             extra_vocab: Optional[Collection[str]] = None,
     ) -> Tuple[np.array, "Language"]:
         """
@@ -509,6 +525,7 @@ class Language:
         :param max_length: maximum length of a sentence
         :param l_sep: The separator for the language
         :param which_lang: Which language to use (1 or 2), if None, assumes that the json file contains a single language
+        :param from_lang: Path to an existing language file to extend
         :param extra_vocab: Extra vocabulary to add to the language
         :output: Tuple of X, Language object for the input language
         """
@@ -522,7 +539,15 @@ class Language:
         with data_path.open("r") as f:
             pairs = json.load(f)
 
-        l = cls('1', sep=l_sep)
+        if from_lang is None:
+            l = cls('1', sep=l_sep)
+        else:
+            with open(from_lang, 'r') as f:
+                lang = json.load(f)
+
+            l = cls('1')
+            l.restore_lang(lang['1'])
+            l.sep = l_sep
 
         if extra_vocab is not None:
             for token in extra_vocab:
