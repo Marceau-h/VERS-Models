@@ -65,6 +65,11 @@ def main(
         make_lang: bool = False,
         overwrite_lang: bool = False,
         single_lang: bool = False,
+        max_length: int = 1000,
+        l1_sep: Optional[str] = None,
+        l2_sep: Optional[str] = None,
+        l1_extra_vocab: Optional[List[str]] = None,
+        l2_extra_vocab: Optional[List[str]] = None,
 
         full_eval: bool = False,
         nb_predictions: int = 10,
@@ -124,22 +129,36 @@ def main(
             print(f"Extending language from {from_lang_path}")
 
         if single_lang:
+            extra_vocab = l1_extra_vocab if l1_extra_vocab else None
             X, l1 = Language.read_data_from_json_1_lang(
                 lang_input_path,
-                from_lang=from_lang_path
+                max_length=max_length,
+                l_sep=l1_sep,
+                from_lang=from_lang_path,
+                extra_vocab=extra_vocab,
             )
             y, l2 = X, l1  # single langue = auto-encode
             Language.save_data_1_lang(X, l1, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
         elif lang_input_path.suffix == ".json":
+            extra_vocab_tuple = (l1_extra_vocab or [], l2_extra_vocab or [])
             X, y, l1, l2 = Language.read_data_from_json(
                 lang_input_path,
-                from_lang=from_lang_path
+                max_length=max_length,
+                l1_sep=l1_sep,
+                l2_sep=l2_sep,
+                from_lang=from_lang_path,
+                extra_vocab=extra_vocab_tuple,
             )
             Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
         else:
+            extra_vocab_tuple = (l1_extra_vocab or [], l2_extra_vocab or [])
             X, y, l1, l2 = Language.read_data_from_txt(
                 lang_input_path,
-                from_lang=from_lang_path
+                max_length=max_length,
+                l1_sep=l1_sep,
+                l2_sep=l2_sep,
+                from_lang=from_lang_path,
+                extra_vocab=extra_vocab_tuple,
             )
             Language.save_data(X, y, l1, l2, lang_path=lang_root / lang_name, overwrite=overwrite_lang)
 
