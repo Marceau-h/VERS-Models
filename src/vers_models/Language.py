@@ -934,11 +934,11 @@ def extract_test_data(
 
 
 def extract_test_data_1_lang(
-        x_path: Union[str, Path] = 'X.npy',
+        # x_path: Union[str, Path] = 'X.npy',
         lang_path: Union[str, Path] = 'lang.json',
         test_save_path: Optional[Union[str, Path]] = None
 ) -> Optional[str]:
-    X_train, X_dev, X_test, lang_input = read_date_1_lang(x_path, lang_path)
+    X_train, X_dev, X_test, lang_input = read_data_1_lang(lang_path)
 
     if test_save_path is not None:
         if isinstance(test_save_path, str):
