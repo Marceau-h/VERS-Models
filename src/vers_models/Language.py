@@ -2,15 +2,15 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
-from io import StringIO
-from re import Pattern, compile, escape
-from pathlib import Path
-from typing import Tuple, Optional, List, Union, Iterable
 from collections.abc import Collection, MutableMapping
+from io import StringIO
+from pathlib import Path
+from re import Pattern, compile, escape
+from typing import Tuple, Optional, List, Union, Iterable
 from unicodedata import normalize
 
-import torch
 import numpy as np
+import torch
 from sklearn.model_selection import train_test_split
 
 RANDOM_STATE = 42
@@ -204,7 +204,10 @@ class Language:
         if isinstance(self.sep, list):
             return self.sep[0].join(sentence)
 
-        raise ValueError("sep must be a string or a list of strings, can't concatenate back the sentence with the given sep")
+        raise ValueError(
+            "sep must be a string or a list of strings, "
+            "can't concatenate back the sentence with the given sep"
+            )
 
     def sent_len(self, sentence: str) -> int:
         """
@@ -241,6 +244,17 @@ class Language:
             self.n_tokens += 1
         else:
             self.token2count[token] += 1
+
+    def add_tokens(self, tokens: Iterable[str]) -> None:
+        """
+        Takes a list of tokens and adds the ones that were not in the language
+        :param tokens: list of tokens to add
+        :return: None
+        """
+        _ = [
+            self.add_token(token)
+            for token in tokens
+        ]
 
     def indices_from_sentence(self, sentence: str) -> List[int]:
         """
@@ -305,7 +319,7 @@ class Language:
             pairs_sep: str = "\t",
             instance_sep: str = "\n",
             from_lang: Optional[Path] = None,
-            extra_vocab: Optional[Iterable[Collection[str]]] = None,
+            extra_vocab: Optional[Iterable[Iterable[str]]] = None,
     ) -> Tuple[np.array, np.array, "Language", "Language"]:
         """
         Function to read data from a txt file
@@ -315,6 +329,9 @@ class Language:
         :param l2_sep: The separator for the second language
         :param pairs_sep: The separator between the pairs
         :param instance_sep: The separator between the instances
+        :param from_lang: The language to build upon from
+        :param extra_vocab: extra vocabulary (optional),
+            the tokens will be put first in the new language (except for the special tokens and thot of a `from_lang`
         :return: Tuple of X, y, Language object for the input language, Language object for the output language
         """
         if isinstance(data_path, str):
@@ -334,7 +351,7 @@ class Language:
             )
             for p0, p1 in pairs
             if 0 < len(p0) <= max_length
-            and 0 < len(p1) <= max_length
+               and 0 < len(p1) <= max_length
         ]
 
         if from_lang is None:
@@ -354,11 +371,13 @@ class Language:
             l2.sep = l2_sep
 
         if extra_vocab is not None:
-            for token in extra_vocab[0]:
-                l1.add_token(token)
-
-            for token in extra_vocab[1]:
-                l2.add_token(token)
+            l1.add_tokens(extra_vocab[0])
+            l2.add_tokens(extra_vocab[1])
+            # for token in extra_vocab[0]:
+            #     l1.add_token(token)
+            #
+            # for token in extra_vocab[1]:
+            #     l2.add_token(token)
 
         for pair in pairs:
             l1.add_sentence(pair[0])
@@ -395,8 +414,8 @@ class Language:
             cls,
             data_path: Union[str, Path],
             max_length=1000,
-            l1_sep = None,
-            l2_sep = None,
+            l1_sep=None,
+            l2_sep=None,
             from_lang: Optional[Path] = None,
             extra_vocab: Optional[Iterable[Collection[str]]] = None,
     ) -> Tuple[np.array, np.array, "Language", "Language"]:
@@ -554,7 +573,7 @@ class Language:
                 l.add_token(token)
 
         if which_lang is not None:
-            assert which_lang in {1,2}, "which_lang must be 1 or 2"
+            assert which_lang in {1, 2}, "which_lang must be 1 or 2"
             if isinstance(pairs, dict):
                 single = [
                     (
@@ -614,7 +633,6 @@ class Language:
         )
         print(len(X), X[0], len(X[0]))
         return X, l
-
 
     @classmethod
     def load_data(
@@ -773,7 +791,10 @@ class Language:
             lang_path.mkdir(parents=True, exist_ok=overwrite)
         except FileExistsError:
             if not overwrite:
-                raise FileExistsError(f"Directory {lang_path} already exists, please provide a different path or set overwrite to True")
+                raise FileExistsError(
+                    f"Directory {lang_path} already exists,"
+                    "please provide a different path or set overwrite to True"
+                    )
 
         np.save(lang_path / 'X.npy', X)
         np.save(lang_path / 'y.npy', y)
@@ -808,7 +829,10 @@ class Language:
             lang_path.mkdir(parents=True, exist_ok=overwrite)
         except FileExistsError:
             if not overwrite:
-                raise FileExistsError(f"Directory {lang_path} already exists, please provide a different path or set overwrite to True")
+                raise FileExistsError(
+                    f"Directory {lang_path} already exists,"
+                    "please provide a different path or set overwrite to True"
+                    )
 
         np.save(lang_path / 'X.npy', X)
 
@@ -866,6 +890,7 @@ def read_data(
 
     return X_train, X_dev, X_test, y_train, y_dev, y_test, lang_input, lang_output
 
+
 def read_data_1_lang(
         lang_path: Union[str, Path]
 ) -> Tuple[np.array, np.array, np.array, Language]:
@@ -902,7 +927,6 @@ def read_data_1_lang(
     )
 
     return X_train, X_dev, X_test, lang_input
-
 
 
 def extract_test_data(
@@ -1003,10 +1027,10 @@ if __name__ == '__main__':
 
     vocabulary = {
         *{
-            f"{i}F": i for i in range(1,21)
+            f"{i}F": i for i in range(1, 21)
         }
         , *{
-            f"{i}M": i for i in range(1,21)
+            f"{i}M": i for i in range(1, 21)
         }
     }
     vocabulary = sorted(vocabulary, key=lambda x: int(x[:-1]) if x[-1] in {'F', 'M'} else 0)
