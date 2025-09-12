@@ -91,11 +91,11 @@ def write_output(
     else:
         raise ValueError(f"Unsupported output type: {type_}")
 
-def _prompt_user() -> str:
+def _prompt_user(what:str="input") -> str:
     """
     Core tty reader
     """
-    prompt = "No input provided. Please enter your input (end with an empty line):"
+    prompt = f"No {what} provided. Please enter your {what} (end with an empty line):"
     print(prompt)
     lines = []
     while True:
@@ -110,12 +110,11 @@ def _prompt_user() -> str:
 
 def prompt_user(
         input: Iterable[Optional[str]],
+        what: str = "input",
+        use_stdin: bool = True,
 ) -> List[str]:
-    """
-    If
-    """
     collected = []
-    stdin_consumed = False
+    stdin_consumed = not use_stdin
     for item in input:
         if item == '-' or item is None:
             if not stdin_consumed:
@@ -136,9 +135,12 @@ def prompt_user(
                 if sys.stdin.isatty():
                     stdin_text = _prompt_user()
                     if not stdin_text:
-                        raise ValueError("No input provided interactively.")
+                        raise ValueError(f"No {what} provided interactively.")
+                elif use_stdin:
+                    raise ValueError(f"No {what} provided from args or stdin and unable to prompt interactively.")
                 else:
-                    raise ValueError("No input provided from stdin and unable to prompt interactively.")
+                    raise ValueError(f"No {what} provided from args and unable to prompt interactively.")
+
             collected.extend([l for l in stdin_text.splitlines() if l.strip()])
         else:
             collected.append(item)
@@ -231,6 +233,28 @@ def cli():
         "--overwrite_lang", action="store_true",
         help="Overwrite existing language data if it exists"
     )
+
+    parser.add_argument(
+        "--max_length", type=int, default=1000,
+        help="Maximum length of sentences when creating language data (default: 1000)"
+    )
+    parser.add_argument(
+        "--l1_sep", type=str, default=None, action="append",
+        help="Separator for language 1 (input language). Can be a single separator string."
+    )
+    parser.add_argument(
+        "--l2_sep", type=str, default=None, action="append",
+        help="Separator for language 2 (output language). Can be a single separator string."
+    )
+    parser.add_argument(
+        "--l1_extra_vocab", type=str, action="append", default=None,
+        help="Extra vocabulary tokens to include for language 1. Can be specified multiple times."
+    )
+    parser.add_argument(
+        "--l2_extra_vocab", type=str, action="append", default=None,
+        help="Extra vocabulary tokens to include for language 2. Can be specified multiple times."
+    )
+
 
     parser.add_argument(
         "--full_eval", action="store_true",
@@ -364,7 +388,7 @@ def cli():
                     f"\n{', '.join(user_df.columns)}"
                 )
     if parsed.input is not None:
-        collected = prompt_user(parsed.input)
+        collected = prompt_user(parsed.input, "input", use_stdin=True)
         if collected:
             if user_df is not None:
                 raise ValueError("Cannot use both --input_file and --input options simultaneously.")
@@ -385,6 +409,11 @@ def cli():
         from_lang=parsed.from_lang,
         make_lang=parsed.make_lang,
         overwrite_lang=parsed.overwrite_lang,
+        max_length=parsed.max_length,
+        l1_sep=parsed.l1_sep,
+        l2_sep=parsed.l2_sep,
+        l1_extra_vocab=l1_extra_vocab_processed,
+        l2_extra_vocab=l2_extra_vocab_processed,
         full_eval=parsed.full_eval,
         nb_predictions=parsed.nb_predictions,
         model_class=parsed.model_class,
