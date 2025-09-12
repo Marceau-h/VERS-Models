@@ -33,6 +33,9 @@ class S2SMultiHeadAttn(BaseModel):
         self.lr = self.params["lr"]
         self.teacher_forcing_ratio = self.params["teacher_forcing_ratio"]
         self.num_heads = self.params["num_heads"]
+        self.max_input_length =self.params["max_input_length"]
+        self.max_output_length = self.params["max_output_length"]
+
 
         # Encoder components
         self.encoder_embedding = nn.Embedding(self.input_size, self.embed_size)
@@ -122,7 +125,7 @@ class S2SMultiHeadAttn(BaseModel):
             input_.fill_(lang_output.SOS_ID)
 
             outputs = [lang_output.SOS_ID]
-            for _ in range(self.output_size):
+            for _ in range(self.max_output_length):
                 embedded_trg = self.decoder_embedding(input_).unsqueeze(1)
                 output, (hidden, cell) = self.decoder_lstm(embedded_trg, (hidden, cell))
                 dec_state = output.squeeze(1)
