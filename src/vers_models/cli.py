@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 from enum import Enum
 from pathlib import Path
 from time import perf_counter_ns as ns
-from typing import Optional, List, Any, Iterable, Tuple
+from typing import Optional, List, Any, Iterable, Tuple, Union
 
 import polars as pl
 
@@ -164,7 +164,7 @@ def read_vocab_from_file(file: Union[str, Path], lang_code: str) -> List[str]:
         case '.txt':
             with file.open(mode="r", encoding="utf-8") as f:
                 return [e for e in f.readlines() if e]
-        case '.jsonl':
+        case '.json':
             with file.open(mode="r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
