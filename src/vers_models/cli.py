@@ -399,11 +399,18 @@ def cli():
 
     output_path = Path(parsed.output) if parsed.output is not None else None
 
-    if parsed.l1_extra_vocab is not None:
-        l1_extra_vocab = prompt_user(parsed.l1_extra_vocab, "extra_vocab", use_stdin=False)
+    l1_extra_vocab = (
+        prompt_user(parsed.l1_extra_vocab, "l1_extra_vocab", use_stdin=False)
+        if parsed.l1_extra_vocab is not None
+        else None
+    )
 
-    if parsed.l2_extra_vocab is not None:
-        l2_extra_vocab = prompt_user(parsed.l2_extra_vocab, "extra_vocab", use_stdin=False)
+    l2_extra_vocab = (
+        prompt_user(parsed.l2_extra_vocab, "l2_extra_vocab", use_stdin=False)
+        if parsed.l2_extra_vocab is not None
+        else None
+
+    )
 
     start_time = ns()
     res = main(
