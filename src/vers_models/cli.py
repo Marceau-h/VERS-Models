@@ -1,14 +1,14 @@
 # SPDX-FileCopyrightText: 2025-present Marceau <git@marceau-h.fr>
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from enum import Enum
-from time import perf_counter_ns as ns
-from argparse import ArgumentParser, Namespace
-import sys
 import json
-from pathlib import Path
 import select
-from typing import Optional, List, Dict, Any, Iterable, assert_never, Tuple
+import sys
+from argparse import ArgumentParser
+from enum import Enum
+from pathlib import Path
+from time import perf_counter_ns as ns
+from typing import Optional, List, Any, Iterable, Tuple
 
 import polars as pl
 
@@ -59,6 +59,7 @@ class TYPES_N_FUNC(Enum):
 
         return self.value == other.value
 
+
 def read_input(input_path: Path) -> Tuple[pl.DataFrame, TYPES_N_FUNC]:
     type_ = TYPES_N_FUNC.from_str(input_path.suffix)
     if type_ == TYPES_N_FUNC.CSV:
@@ -72,6 +73,7 @@ def read_input(input_path: Path) -> Tuple[pl.DataFrame, TYPES_N_FUNC]:
     if type_ == TYPES_N_FUNC.PARQUET:
         return pl.read_parquet(input_path), type_
     raise ValueError(f"Unsupported input type: {type_}, cannot read {input_path.suffix} files")
+
 
 def write_output(
         df: pl.DataFrame,
@@ -91,7 +93,8 @@ def write_output(
     else:
         raise ValueError(f"Unsupported output type: {type_}")
 
-def _prompt_user(what:str="input") -> str:
+
+def _prompt_user(what: str = "input") -> str:
     """
     Core tty reader
     """
@@ -107,6 +110,7 @@ def _prompt_user(what:str="input") -> str:
             break
         lines.append(line)
     return "\n".join(lines).strip()
+
 
 def prompt_user(
         input: Iterable[Optional[str]],
@@ -147,6 +151,34 @@ def prompt_user(
 
     return collected
 
+
+def read_vocab_from_file(file: Union[str, Path], lang_code: str) -> List[str]:
+    if not isinstance(file, Path):
+        file = Path(file)
+
+    assert file.exists(), f"File {file} does not exist"
+    assert file.is_file(), f"File {file} is not a file"
+    assert lang_code in {"l1", "l2"}, f"Language code {lang_code} is unknown"
+
+    match file.suffix.lower():
+        case '.txt':
+            with file.open(mode="r", encoding="utf-8") as f:
+                return [e for e in f.readlines() if e]
+        case '.jsonl':
+            with file.open(mode="r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                assert lang_code in data, f"Language code {lang_code} is not present in the json dictionary provided"
+                data = data[lang_code]
+
+            assert isinstance(data,
+                              list), f"Language code {lang_code} is present in the json dictionary provided but incorrect data is associated !"
+
+            return data
+        case _:
+            raise ValueError(f"Unsupported file type: {file.suffix}")
+
+
 def pretty_time(ns: int) -> str:
     """
     Convert nanoseconds to a pretty string representation of time
@@ -174,6 +206,7 @@ def main(*args, **kwargs):
     except ImportError:
         from vers_models.main import main
     return main(*args, **kwargs)
+
 
 def list_models() -> str:
     """
@@ -246,15 +279,32 @@ def cli():
         "--l2_sep", type=str, default=None, action="append",
         help="Separator for language 2 (output language). Can be a single separator string."
     )
+
     parser.add_argument(
         "--l1_extra_vocab", type=str, action="append", default=None,
         help="Extra vocabulary tokens to include for language 1. Can be specified multiple times."
     )
     parser.add_argument(
+        "--l1_extra_vocab_file", type=str, default=None,
+        help="Overrides the `l1_extra_vocab` parameter !"
+             "\nExtra vocabulary tokens to include for language 1 from a file,"
+             "\neither a `.txt` in which tokens are separated by a newline"
+             "\nor a `.json` where each token is an element of the root list"
+             "\nor the list that is the value pair of the `'l1'` key in the root dict"
+    )
+
+    parser.add_argument(
         "--l2_extra_vocab", type=str, action="append", default=None,
         help="Extra vocabulary tokens to include for language 2. Can be specified multiple times."
     )
-
+    parser.add_argument(
+        "--l2_extra_vocab_file", type=str, default=None,
+        help="Overrides the `l2_extra_vocab` parameter !"
+             "\nExtra vocabulary tokens to include for language 2 from a file,"
+             "\neither a `.txt` in which tokens are separated by a newline"
+             "\nor a `.json` where each token is an element of the root list"
+             "\nor the list that is the value pair of the `'l2'` key in the root dict"
+    )
 
     parser.add_argument(
         "--full_eval", action="store_true",
@@ -300,9 +350,9 @@ def cli():
     parser.add_argument(
         "--get_partial_forward", action="store_true",
         help=
-            "Get the partial forward pass of the model as an output (useful for autoencoders or similar models)"
-            "\nThe output will be the encoder output of the model."
-            "\nThis functionality is not available for autoencoder models"
+        "Get the partial forward pass of the model as an output (useful for autoencoders or similar models)"
+        "\nThe output will be the encoder output of the model."
+        "\nThis functionality is not available for autoencoder models"
     )
 
     parser.add_argument(
@@ -400,16 +450,21 @@ def cli():
     output_path = Path(parsed.output) if parsed.output is not None else None
 
     l1_extra_vocab = (
+        read_vocab_from_file(parsed.l1_extra_vocab_file, "l1")
+        if parsed.l1_extra_vocab_file is not None
+        else
         prompt_user(parsed.l1_extra_vocab, "l1_extra_vocab", use_stdin=False)
         if parsed.l1_extra_vocab is not None
         else None
     )
 
     l2_extra_vocab = (
+        read_vocab_from_file(parsed.l2_extra_vocab_file, "l2")
+        if parsed.l2_extra_vocab_file is not None
+        else
         prompt_user(parsed.l2_extra_vocab, "l2_extra_vocab", use_stdin=False)
         if parsed.l2_extra_vocab is not None
         else None
-
     )
 
     start_time = ns()
@@ -445,7 +500,6 @@ def cli():
     )
     print(f"Done ! Took {pretty_time(ns() - start_time)}")
 
-
     if res is not None:
         if output_path is not None:
             if output_path.is_dir():
@@ -456,6 +510,7 @@ def cli():
             print(f"Output written to {output_path}")
         else:
             print(res)
+
 
 if __name__ == "__main__":
     cli()
