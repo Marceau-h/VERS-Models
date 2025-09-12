@@ -12,15 +12,44 @@ import polars as pl
 try:
     from .Language import Language, read_data, read_data_1_lang
     from .eval import random_predict, do_full_eval, get_partial_output
-    from .models import models
+    from .models import models, BaseModel
     from .train import auto_train
     from .profiler import profiler_wrapper
 except ImportError:
     from vers_models.Language import Language, read_data, read_data_1_lang
     from vers_models.eval import random_predict, do_full_eval, get_partial_output
-    from vers_models.models import models
+    from vers_models.models import models, BaseModel
     from vers_models.train import auto_train
     from vers_models.profiler import profiler_wrapper
+
+
+
+def predict_one(
+        sentence: str,
+        lang_input_obj:Language,
+        lang_output_obj:Language,
+        model:BaseModel
+) -> str:
+    try:
+        token_ids = (
+                [lang_input_obj.SOS_ID]
+                + [
+                    lang_input_obj.tindex(token)
+                    for token in lang_input_obj.sent_iter(sentence)
+                ]
+                + [lang_input_obj.EOS_ID]
+        )
+    except Exception as e:
+        print(f"Error processing sentence: {e}")
+        return None
+
+    pred_tokens = model.predict(token_ids, lang_output=lang_output_obj)
+    if not isinstance(pred_tokens, list):
+        pred_tokens = list(pred_tokens)
+    sep = lang_output_obj.sep if lang_output_obj.sep else " | "
+    if isinstance(sep, Iterable):
+        sep = sep[0]  # type: ignore
+    return sep.join(pred_tokens)
 
 
 def main(
@@ -159,30 +188,11 @@ def main(
         raw_inputs = df_input[user_df_input_col].to_list()
         print(f"Running in inference mode on {len(raw_inputs)} inputs")
 
-        def predict_one(sentence: str) -> str:
-            # Convertir phrase brute en indices
-            try:
-                token_ids = (
-                        [lang_input_obj.SOS_ID]
-                        + [
-                            lang_input_obj.tindex(token)
-                            for token in lang_input_obj.sent_iter(sentence)
-                        ]
-                        + [lang_input_obj.EOS_ID]
-                )
-            except Exception as e:
-                print(f"Error processing sentence: {e}")
-                return None
 
-            pred_tokens = model.predict(token_ids, lang_output=lang_output_obj)
-            if not isinstance(pred_tokens, list):
-                pred_tokens = list(pred_tokens)
-            sep = lang_output_obj.sep if lang_output_obj.sep else " | "
-            if isinstance(sep, Iterable):
-                sep = sep[0]  # type: ignore
-            return sep.join(pred_tokens)
-
-        outputs = [predict_one(s) for s in raw_inputs]
+        outputs = [
+            predict_one(s, lang_input_obj, lang_output_obj, model)
+            for s in raw_inputs
+        ]
 
         df_output = df_input.with_columns(
             pl.Series("output", outputs)
