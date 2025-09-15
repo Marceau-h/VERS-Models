@@ -221,7 +221,8 @@ def main(
             f"`{user_df_input_col}` (default: `input`)"
         )
         raw_inputs = df_input[user_df_input_col].to_list()
-        print(f"Running in inference mode on {len(raw_inputs)} inputs")
+        count = len(raw_inputs) if isinstance(raw_inputs[0], str) else sum(len(r) for r in raw_inputs)
+        print(f"Running in inference mode on {count} inputs")
 
 
         outputs = [
