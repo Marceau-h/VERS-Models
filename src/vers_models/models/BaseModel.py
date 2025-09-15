@@ -632,7 +632,12 @@ class BaseModel(ABC, nn.Module):
         raise NotImplementedError("Forward method not implemented")
 
     @abstractmethod
-    def predict(self, src:Union[ndarray, list, Tensor], lang_output:Language) -> Iterable[str]:
+    def predict(
+            self,
+            src:Union[ndarray, list, Tensor],
+            lang_output:Language,
+            batch_mode:bool=False
+    ) -> Union[Iterable[str], Iterable[Iterable[str]]]:
         raise NotImplementedError("Predict method not implemented")
 
     @abstractmethod
