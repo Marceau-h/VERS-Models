@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Iterable
+from typing import Optional, List, Dict, Any, Iterable, Union
 
 import numpy as np
 import torch
@@ -21,6 +21,22 @@ except ImportError:
     from vers_models.models import models, BaseModel
     from vers_models.train import auto_train
     from vers_models.profiler import profiler_wrapper
+
+
+def predict_one_or_many(
+        sentence: Union[str, List[str]],
+        lang_input_obj:Language,
+        lang_output_obj:Language,
+        model:BaseModel
+) -> Union[str, List[str]]:
+    if isinstance(sentence, str):
+        return predict_one(sentence, lang_input_obj, lang_output_obj, model)
+    elif isinstance(sentence, list):
+        assert all(isinstance(s, str) for s in sentence), "All elements in the list must be strings"
+        return [
+            predict_one(s, lang_input_obj, lang_output_obj, model)
+            for s in sentence
+        ]
 
 
 
@@ -209,7 +225,7 @@ def main(
 
 
         outputs = [
-            predict_one(s, lang_input_obj, lang_output_obj, model)
+            predict_one_or_many(s, lang_input_obj, lang_output_obj, model)
             for s in raw_inputs
         ]
 
