@@ -27,14 +27,15 @@ def predict_one_or_many(
         sentence: Union[str, List[str]],
         lang_input_obj:Language,
         lang_output_obj:Language,
-        model:BaseModel
+        model:BaseModel,
+        remove_special_tokens: bool = True,
 ) -> Union[str, List[str]]:
     if isinstance(sentence, str):
-        return predict_one(sentence, lang_input_obj, lang_output_obj, model)
+        return predict_one(sentence, lang_input_obj, lang_output_obj, model, remove_special_tokens=remove_special_tokens)
     elif isinstance(sentence, list):
         assert all(isinstance(s, str) for s in sentence), "All elements in the list must be strings"
         return [
-            predict_one(s, lang_input_obj, lang_output_obj, model)
+            predict_one(s, lang_input_obj, lang_output_obj, model, remove_special_tokens=remove_special_tokens)
             for s in sentence
         ]
 
@@ -44,7 +45,8 @@ def predict_one(
         sentence: str,
         lang_input_obj:Language,
         lang_output_obj:Language,
-        model:BaseModel
+        model:BaseModel,
+        remove_special_tokens: bool = True,
 ) -> str:
     try:
         token_ids = (
@@ -63,6 +65,11 @@ def predict_one(
     if not isinstance(pred_tokens, list):
         pred_tokens = list(pred_tokens)
     sep = lang_output_obj.sep if lang_output_obj.sep else " | "
+    if remove_special_tokens:
+        pred_tokens = [
+            t for t in pred_tokens
+            if t not in lang_output_obj.special_tokens
+        ]
     if isinstance(sep, Iterable):
         sep = sep[0]  # type: ignore
     return sep.join(pred_tokens)
@@ -103,6 +110,7 @@ def main(
         user_df: Optional[pl.DataFrame] = None,
         user_df_input_col: Optional[str] = None,
         output_path: Optional[Path] = None,
+        remove_special_tokens: bool = True,
 ) -> Optional[List[Dict[str, Any]]]:
     train_func = profiler_wrapper(auto_train, profile_=with_profiler)
     full_eval_func = profiler_wrapper(do_full_eval, profile_=with_profiler)
@@ -226,7 +234,7 @@ def main(
 
 
         outputs = [
-            predict_one_or_many(s, lang_input_obj, lang_output_obj, model)
+            predict_one_or_many(s, lang_input_obj, lang_output_obj, model, remove_special_tokens=remove_special_tokens)
             for s in raw_inputs
         ]
 
