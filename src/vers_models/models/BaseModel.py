@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
+from contextlib import suppress
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -660,10 +661,18 @@ class BaseModel(ABC, nn.Module):
         raise NotImplementedError("Finetune method not implemented")
 
     def __del__(self):
-        if not list(self.model_dir.iterdir()):
-            self.model_dir.rmdir()
-        if not list(self.checkpoints_dir.iterdir()):
-            self.checkpoints_dir.rmdir()
+        """
+        Clean up the model directory and checkpoints directory if they are empty.
+        """
+        # To ignore errors during cleanup as the object might be partially initialized
+        with suppress(AttributeError, OSError, KeyboardInterrupt):
+            if (hasattr(self, 'model_dir') and self.model_dir.exists() and
+                not any(self.model_dir.iterdir())):
+                self.model_dir.rmdir()
+
+            if (hasattr(self, 'checkpoints_dir') and self.checkpoints_dir.exists() and
+                not any(self.checkpoints_dir.iterdir())):
+                self.checkpoints_dir.rmdir()
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.params})"
@@ -682,12 +691,3 @@ class BaseModel(ABC, nn.Module):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __delete__(self, instance):
-        """
-        Clean up the model directory and checkpoints directory if they are empty.
-        """
-        if not list(self.model_dir.iterdir()):
-            self.model_dir.rmdir()
-        if not list(self.checkpoints_dir.iterdir()):
-
-            self.checkpoints_dir.rmdir()
