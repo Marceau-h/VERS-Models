@@ -6,7 +6,7 @@ from collections.abc import Collection, MutableMapping
 from io import StringIO
 from pathlib import Path
 from re import Pattern, compile, escape
-from typing import Tuple, Optional, List, Union, Iterable
+from typing import Tuple, Optional, List, Union, Iterable, Set
 from unicodedata import normalize
 
 import numpy as np
@@ -131,11 +131,34 @@ class Language:
             value_type=str
         )
 
+        self._special_tokens = { # Mangled as it shouldn't be edited
+            self.SOS_TOKEN,
+            self.EOS_TOKEN,
+            self.PAD_TOKEN,
+            self.UNK_TOKEN
+        }
+
+        self._special_ids = { # Mangled as it shouldn't be edited
+            self.SOS_ID,
+            self.EOS_ID,
+            self.PAD_ID,
+            self.UNK_ID
+        }
+
         self.n_tokens: int = 4
         self.max_length: int = 0
         self.sep: Optional[Union[str, List[str]]] = sep
         self.re_sep: Optional[str] = None
         self.re_sep_compiled: Optional[Pattern] = None
+
+    @property
+    def special_tokens(self) -> Set[str]:
+        return self._special_tokens
+
+    @property
+    def special_ids(self) -> Set[int]:
+        return self._special_ids
+
 
     def itoken(self, index: int) -> str:
         """
