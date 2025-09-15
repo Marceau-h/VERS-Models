@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import math
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Iterable
 
 from numpy import ndarray
 import torch
@@ -126,7 +126,7 @@ class Transfo(BaseModel):
         )
         return self.fc_out(out)
 
-    def predict(self, src:Union[ndarray, list, Tensor], lang_output:Language) -> List[str]:
+    def _predict_single(self, src: Tensor, lang_output: Language) -> Iterable[str]:
         self.eval()
         src = self.to_tensor(src)
         src = src.unsqueeze(0)
@@ -154,6 +154,68 @@ class Transfo(BaseModel):
 
             return [lang_output.index2token[idx] for idx in outputs]
 
+    def _predict_batch(self, src: Union[list, ndarray, Tensor], lang_output: Language) -> List[List[str]]:
+        """Optimized batch prediction processing all sequences simultaneously."""
+        src = self._process_batch_input(src)
+        batch_size = src.size(0)
+
+        with torch.inference_mode():
+            src_mask = self.make_src_key_padding_mask(src)
+            embed_src = self.pos_encoder(self.src_tok_embed(src))
+            memory = self.transformer.encoder(embed_src, src_key_padding_mask=src_mask)
+
+            batch_outputs = [[lang_output.SOS_ID] for _ in range(batch_size)]
+
+            active_mask = torch.ones(batch_size, dtype=torch.bool, device=self.device)
+
+            for step in range(self.max_output_length):
+                if not active_mask.any():
+                    break
+
+                max_tgt_len = max(len(seq) for seq in batch_outputs)
+
+                tgt_batch = torch.full(
+                    (batch_size, max_tgt_len),
+                    PAD_ID,
+                    dtype=torch.long,
+                    device=self.device
+                )
+
+                for i, seq in enumerate(batch_outputs):
+                    tgt_batch[i, :len(seq)] = torch.tensor(seq, dtype=torch.long, device=self.device)
+
+                tgt_mask = self.make_tgt_mask(tgt_batch)
+                tgt_key_padding_mask = self.make_src_key_padding_mask(tgt_batch)
+
+                embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt_batch))
+
+                decoder_output = self.transformer.decoder(
+                    embed_tgt,
+                    memory,
+                    tgt_mask=tgt_mask,
+                    tgt_key_padding_mask=tgt_key_padding_mask,
+                    memory_key_padding_mask=src_mask
+                )
+
+                logits = self.fc_out(decoder_output)  # [batch_size, max_tgt_len, vocab_size]
+
+                next_tokens = []
+                for i in range(batch_size):
+                    if active_mask[i]:
+                        last_pos = len(batch_outputs[i]) - 1
+                        next_token = logits[i, last_pos].argmax().item()
+                        next_tokens.append(next_token)
+                        batch_outputs[i].append(next_token)
+
+                        if next_token == lang_output.EOS_ID:
+                            active_mask[i] = False
+
+            all_results = []
+            for sequence_tokens in batch_outputs:
+                result = [lang_output.index2token[idx] for idx in sequence_tokens]
+                all_results.append(result)
+
+            return all_results
 
     def do_train(
             self,

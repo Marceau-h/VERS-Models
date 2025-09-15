@@ -631,14 +631,41 @@ class BaseModel(ABC, nn.Module):
     def forward(self, src:Tensor, trg:Tensor) -> Tensor:
         raise NotImplementedError("Forward method not implemented")
 
-    @abstractmethod
     def predict(
             self,
-            src:Union[ndarray, list, Tensor],
+            src:Union[ndarray, list, Tensor, DataLoader],
             lang_output:Language,
-            batch_mode:bool=False
+            batch_mode: bool = False
     ) -> Union[Iterable[str], Iterable[Iterable[str]]]:
-        raise NotImplementedError("Predict method not implemented")
+        self.eval()
+
+        if isinstance(src, DataLoader):
+            return self._handle_dataloader_input(src, lang_output)
+
+        if batch_mode:
+            return self._predict_batch(src, lang_output)
+
+        src = self.to_tensor(src)
+        return self._predict_single(src, lang_output)
+
+    @abstractmethod
+    def _predict_single(self, src: Tensor, lang_output: Language) -> Iterable[str]:
+        raise NotImplementedError("_predict_single method not implemented")
+
+    def _predict_batch(self, src: Tensor, lang_output: Language) -> Iterable[Iterable[str]]:
+        raise NotImplementedError("_predict_batch method not implemented")
+
+    def _handle_dataloader_input(self, src: DataLoader, lang_output: Language):
+        return [
+            self.predict(batch, lang_output, batch_mode=True)
+            for batch in src
+        ]
+
+    def _process_batch_input(self, src: Tensor) -> Tensor:
+        src = self.to_tensor(src)
+        if src.dim() == 1:
+            src = src.unsqueeze(0)
+        return src
 
     @abstractmethod
     def do_train(

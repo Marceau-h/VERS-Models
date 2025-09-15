@@ -9,7 +9,7 @@ from numpy import ndarray
 import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import trange
 
 try:
@@ -105,7 +105,7 @@ class S2SMultiHeadAttn(BaseModel):
 
         return outputs
 
-    def predict(self, src:Union[ndarray, list, Tensor], lang_output:Language) -> Iterable[str]:
+    def _predict_single(self, src: Tensor, lang_output: Language) -> Iterable[str]:
         self.eval()
         src = self.to_tensor(src)
 
@@ -144,6 +144,57 @@ class S2SMultiHeadAttn(BaseModel):
                 input_.fill_(predicted_token)
 
         return [lang_output.index2token[token] for token in outputs]
+
+    def _predict_batch(self, src: Union[list, ndarray, Tensor], lang_output: Language) -> Iterable[Iterable[str]]:
+        src = self._process_batch_input(src)
+        batch_size = src.size(0)
+
+        with torch.inference_mode():
+            embedded_src = self.encoder_embedding(src)  # [batch_size, seq_len, embed_size]
+            encoder_outputs, (hidden, cell) = self.encoder_lstm(embedded_src)
+
+            if len(hidden.shape) != 3:
+                raise ValueError("Hidden shape is not 3D")
+
+            hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1).unsqueeze(0)
+            cell = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1).unsqueeze(0)
+
+            input_tokens = torch.full((batch_size,), lang_output.SOS_ID, device=self.device, dtype=torch.long)
+            active_mask = torch.ones(batch_size, dtype=torch.bool, device=self.device)
+
+            batch_outputs = [[] for _ in range(batch_size)]
+
+            for i in range(batch_size):
+                batch_outputs[i].append(lang_output.SOS_ID)
+
+            for step in range(self.max_output_length):
+                if not active_mask.any():
+                    break
+
+                embedded_input = self.decoder_embedding(input_tokens.unsqueeze(1))  # [batch_size, 1, embed_size]
+                decoder_output, (hidden, cell) = self.decoder_lstm(embedded_input, (hidden, cell))
+                attn_output, _ = self.multihead_attn(decoder_output, encoder_outputs, encoder_outputs)
+
+                combined = torch.cat((decoder_output.squeeze(1), attn_output.squeeze(1)), dim=1)
+                predictions = self.fc_out(combined)  # [batch_size, vocab_size]
+                predicted_tokens = predictions.argmax(1)  # [batch_size]
+
+                for i in range(batch_size):
+                    if active_mask[i]:
+                        token_id = predicted_tokens[i].item()
+                        batch_outputs[i].append(token_id)
+
+                        if token_id == lang_output.EOS_ID:
+                            active_mask[i] = False
+
+                input_tokens = predicted_tokens
+
+            all_results = []
+            for sequence_tokens in batch_outputs:
+                result = [lang_output.index2token[token] for token in sequence_tokens]
+                all_results.append(result)
+
+            return all_results
 
     def do_train(
             self,
