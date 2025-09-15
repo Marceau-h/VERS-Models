@@ -70,13 +70,26 @@ class BaseModel(ABC, nn.Module):
     @classmethod
     def solve_paths(cls) -> tuple[Path, int, Path, Path, Path, Path, Path, Path, Path]:
         root_dir, relative_to_root = cls.get_root_dir()
-        lang_root = root_dir / cls.LANGS_ROOT_DIR_NAME
-        eval_root = root_dir / cls.EVALS_ROOT_DIR_NAME
-        errors_root = root_dir / cls.ERRORS_ROOT_DIR_NAME
-        logs_root = root_dir / cls.LOGS_ROOT_DIR_NAME
-        checkpoints_root = root_dir / cls.CHECKPOINTS_ROOT_DIR_NAME
-        configs_root = root_dir / cls.CONFIGS_ROOT_DIR_NAME
-        model_root = root_dir / cls.MODEL_ROOT_DIR_NAME
+        (
+            lang_root,
+            eval_root,
+            errors_root,
+            logs_root,
+            checkpoints_root,
+            configs_root,
+            model_root
+        ) = [
+            root_dir / dir_name
+            for dir_name in [
+                cls.LANGS_ROOT_DIR_NAME,
+                cls.EVALS_ROOT_DIR_NAME,
+                cls.ERRORS_ROOT_DIR_NAME,
+                cls.LOGS_ROOT_DIR_NAME,
+                cls.CHECKPOINTS_ROOT_DIR_NAME,
+                cls.CONFIGS_ROOT_DIR_NAME,
+                cls.MODEL_ROOT_DIR_NAME
+            ]
+        ]
 
         return (
             root_dir,
