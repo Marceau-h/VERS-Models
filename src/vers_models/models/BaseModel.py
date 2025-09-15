@@ -479,20 +479,15 @@ class BaseModel(ABC, nn.Module):
         merged_lang.n_tokens = old_lang.n_tokens
         merged_lang.max_length = old_lang.max_length
         
-        # Add any new tokens from new_lang that aren't already in the old vocabulary
-        for token in new_lang.token2index.keys():
-            if token not in merged_lang.token2index:
-                # Add new token with the next available index
-                merged_lang.token2index[token] = merged_lang.n_tokens
-                merged_lang.index2token[merged_lang.n_tokens] = token
-                # Use count from new language if available, otherwise set to 1
-                if token in new_lang.token2count:
-                    merged_lang.token2count[token] = new_lang.token2count[token]
-                else:
-                    merged_lang.token2count[token] = 1
-                # Increment n_tokens for each new token added
-                merged_lang.n_tokens += 1
-        
+        new_tokens = set(new_lang.token2index.keys()) - set(merged_lang.token2index.keys())
+        for token in new_tokens:
+            merged_lang.token2index[token] = merged_lang.n_tokens # n_tokens == next available index
+
+            merged_lang.index2token[merged_lang.n_tokens] = token
+            merged_lang.token2count[token] += new_lang.token2count.get(token, 1) # .get() to be extra safe
+
+            merged_lang.n_tokens += 1
+
         # Keep the biggest max_length between the two languages
         merged_lang.max_length = max(old_lang.max_length, new_lang.max_length)
         
@@ -507,12 +502,12 @@ class BaseModel(ABC, nn.Module):
         :param new_lang: New language vocabulary (should be merged with old_lang)
         :return: Dictionary mapping old indices to new indices
         """
-        mapping = {}
-        for old_idx, token in old_lang.index2token.items():
-            if token in new_lang.token2index:
-                mapping[old_idx] = new_lang.token2index[token]
-            # If token doesn't exist in new vocabulary, it will be unmapped (lost)
-        return mapping
+        return {
+            old_idx: new_lang.token2index[token]
+            for old_idx, token in old_lang.index2token.items()
+            if token in new_lang.token2index # If token doesn't exist in new vocabulary, it will be unmapped (lost)
+            # But since we are supposed to merge vocabularies, this should not happen, I could remove it we'll see
+        }
 
     def _resize_embedding_layer(
             self, 
