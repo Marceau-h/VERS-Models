@@ -53,8 +53,7 @@ def predict(model, input_sentence, lang_input, lang_output):
         if hasattr(model, 'handle_unknown_tokens'):
             batch = model.handle_unknown_tokens(batch, lang_input)
         input_sentence_lst = lang_input.index2token_sent(batch)
-        # Predict each sample individually
-        predicted_output_lst = [model.predict(row, lang_output=lang_output) for row in batch]
+        predicted_output_lst = model.predict(batch, lang_output=lang_output, batch_mode=True)
         return input_sentence_lst, predicted_output_lst
 
     if isinstance(input_sentence, list) and input_sentence and isinstance(input_sentence[0], (list, tuple)):
