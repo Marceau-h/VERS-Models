@@ -773,6 +773,8 @@ class Language:
             key_type=str,
             value_type=int
         )
+        self._special_tokens = set(self._special_tokens)
+        self._special_ids = set(self._special_ids)
 
     @staticmethod
     def clear_pattern_field_only(obj: object) -> None:
@@ -785,7 +787,7 @@ class Language:
         if isinstance(obj, Pattern):
             return None
         else:
-            raise TypeError
+            raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
     @classmethod
     def save_data(
@@ -821,6 +823,11 @@ class Language:
 
         np.save(lang_path / 'X.npy', X)
         np.save(lang_path / 'y.npy', y)
+
+        l1._special_ids = list(l1._special_ids)
+        l2._special_ids = list(l2._special_ids)
+        l1._special_tokens = list(l1._special_tokens)
+        l2._special_tokens = list(l2._special_tokens)
 
         with open(lang_path / 'lang.json', 'w') as f:
             json.dump(
