@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any, Iterable, Union
 import numpy as np
 import torch
 import polars as pl
+from polars import DataFrame
 
 try:
     from .Language import Language, read_data, read_data_1_lang
@@ -38,6 +39,8 @@ def predict_one_or_many(
             predict_one(s, lang_input_obj, lang_output_obj, model, remove_special_tokens=remove_special_tokens)
             for s in sentence
         ]
+    else:
+        raise ValueError("Input must be a string or a list of strings")
 
 
 
@@ -47,7 +50,7 @@ def predict_one(
         lang_output_obj:Language,
         model:BaseModel,
         remove_special_tokens: bool = True,
-) -> str:
+) -> Optional[str]:
     try:
         token_ids = (
                 [lang_input_obj.SOS_ID]
@@ -111,7 +114,7 @@ def main(
         user_df_input_col: Optional[str] = None,
         output_path: Optional[Path] = None,
         remove_special_tokens: bool = True,
-) -> Optional[List[Dict[str, Any]]]:
+) -> DataFrame | None:
     train_func = profiler_wrapper(auto_train, profile_=with_profiler)
     full_eval_func = profiler_wrapper(do_full_eval, profile_=with_profiler)
     random_eval_func = profiler_wrapper(random_predict, profile_=with_profiler)
