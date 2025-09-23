@@ -112,6 +112,7 @@ def main(
         user_inputs: Optional[List[str]] = None,
         user_df: Optional[pl.DataFrame] = None,
         user_df_input_col: Optional[str] = None,
+        output_file_col: Optional[str] = None,
         output_path: Optional[Path] = None,
         remove_special_tokens: bool = True,
 ) -> DataFrame | None:
@@ -242,16 +243,9 @@ def main(
         ]
 
         df_output = df_input.with_columns(
-            pl.Series("output", outputs)
+            pl.Series(output_file_col, outputs)
         )
 
-        # if output_path is not None:
-        #     out_path = Path(output_path)
-        #     out_path.parent.mkdir(parents=True, exist_ok=True)
-        #     df_output.write_json(out_path)
-        #     print(f"Résultats écrits dans {out_path}")
-        # else:
-        #     print(df_output)
         return df_output
 
     if full_eval:

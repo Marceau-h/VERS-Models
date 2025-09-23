@@ -356,6 +356,12 @@ def cli():
     )
 
     parser.add_argument(
+        "--input", action='append', nargs='?', const='-',
+        help="Direct input (repeatable). Use --input 'text' or --input without value to read from stdin"
+             "\n(or prompt for interactive input if empty). Multiple --input allowed."
+    )
+
+    parser.add_argument(
         "--input_file", type=str, default=None,
         help="JSON file (list of dicts) with at least one 'input' column for batch inference"
     )
@@ -365,13 +371,12 @@ def cli():
     )
 
     parser.add_argument(
-        "--input", action='append', nargs='?', const='-',
-        help="Direct input (repeatable). Use --input 'text' or --input without value to read from stdin"
-             "\n(or prompt for interactive input if empty). Multiple --input allowed."
+        "--output_file", type=str, default=None,
+        help="Output path (otherwise stdout)"
     )
     parser.add_argument(
-        "--output", type=str, default=None,
-        help="Output JSON file (otherwise stdout)"
+        "--output_file_col", type=str, default="output",
+        help="Column name to use as output added to the input_file (default: 'output')"
     )
 
     parsed, unknown = parser.parse_known_args()
@@ -447,7 +452,7 @@ def cli():
             user_df = pl.DataFrame({"input": user_inputs})
             user_inputs = None
 
-    output_path = Path(parsed.output) if parsed.output is not None else None
+    output_path = Path(parsed.output_file) if parsed.output_file is not None else None
 
     l1_extra_vocab = (
         read_vocab_from_file(parsed.l1_extra_vocab_file, "l1")
@@ -496,6 +501,7 @@ def cli():
         user_inputs=user_inputs,
         user_df=user_df,
         user_df_input_col=parsed.input_file_col if user_df is not None else None,
+        output_file_col=parsed.output_file_col if user_df is not None else None,
         output_path=output_path,
     )
     print(f"Done ! Took {pretty_time(ns() - start_time)}")
