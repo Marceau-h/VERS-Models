@@ -34,7 +34,7 @@ class InvalidConfigError(Exception):
 
 
 class BaseModel(ABC, nn.Module):
-    ROOT_DIR_NAME: str = "VERS"
+    ROOT_DIR_NAME: str = "VERS-Models"
     MODEL_ROOT_DIR_NAME: str = "models"
     LANGS_ROOT_DIR_NAME: str = "langs"
     EVALS_ROOT_DIR_NAME: str = "evals"
