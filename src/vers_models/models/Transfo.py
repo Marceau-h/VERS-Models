@@ -20,24 +20,24 @@ except ImportError:
 
 
 class PositionalEncoding(nn.Module):
-    """From the torch doc"""
+    """Positional encoding for batch_first=True (input shape: [batch_size, seq_len, embed_dim])."""
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        pe = torch.zeros(1, max_len, d_model)
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+        pe[0, :, 1::2] = torch.cos(position * div_term)
         self.register_buffer('pe', pe)
 
     def forward(self, x: Tensor) -> Tensor:
         """
         Arguments:
-            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+            x: Tensor, shape ``[batch_size, seq_len, embedding_dim]``
         """
-        x = x + self.pe[:x.size(0)]
+        x = x + self.pe[:, :x.size(1)]
         return self.dropout(x)
 
 
@@ -71,6 +71,7 @@ class Transfo(BaseModel):
 
         self.src_tok_embed = nn.Embedding(self.input_size, self.embed_size)
         self.tgt_tok_embed = nn.Embedding(self.output_size, self.embed_size)
+        self.embed_scale = math.sqrt(self.embed_size)
         self.pos_encoder = PositionalEncoding(self.embed_size, self.dropout, self.max_input_length)
 
         self.transformer = Transformer(
@@ -104,7 +105,7 @@ class Transfo(BaseModel):
         with torch.inference_mode():
             # src: [batch, seq_len]
             src_mask = self.make_src_key_padding_mask(src)
-            embed_src = self.pos_encoder(self.src_tok_embed(src))
+            embed_src = self.pos_encoder(self.src_tok_embed(src) * self.embed_scale)
             memory = self.transformer.encoder(embed_src, src_key_padding_mask=src_mask)
         return memory
 
@@ -113,8 +114,8 @@ class Transfo(BaseModel):
         tgt_mask = self.make_src_key_padding_mask(tgt)
         subsequent_mask = self.make_tgt_mask(tgt)
 
-        embed_src = self.pos_encoder(self.src_tok_embed(src))
-        embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt))
+        embed_src = self.pos_encoder(self.src_tok_embed(src) * self.embed_scale)
+        embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt) * self.embed_scale)
 
         out = self.transformer(
             src=embed_src,
@@ -132,14 +133,14 @@ class Transfo(BaseModel):
         src = src.unsqueeze(0)
         with torch.inference_mode():
             src_mask = self.make_src_key_padding_mask(src)
-            embed_src = self.pos_encoder(self.src_tok_embed(src))
+            embed_src = self.pos_encoder(self.src_tok_embed(src) * self.embed_scale)
             memory = self.transformer.encoder(embed_src, src_key_padding_mask=src_mask)
 
             outputs = [lang_output.SOS_ID]
             for _ in range(self.max_output_length):
                 tgt = torch.tensor(outputs, dtype=torch.long, device=self.device).unsqueeze(0)
                 tgt_mask = self.make_tgt_mask(tgt)
-                embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt))
+                embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt) * self.embed_scale)
                 dec = self.transformer.decoder(
                     embed_tgt,
                     memory,
@@ -161,7 +162,7 @@ class Transfo(BaseModel):
 
         with torch.inference_mode():
             src_mask = self.make_src_key_padding_mask(src)
-            embed_src = self.pos_encoder(self.src_tok_embed(src))
+            embed_src = self.pos_encoder(self.src_tok_embed(src) * self.embed_scale)
             memory = self.transformer.encoder(embed_src, src_key_padding_mask=src_mask)
 
             batch_outputs = [[lang_output.SOS_ID] for _ in range(batch_size)]
@@ -187,7 +188,7 @@ class Transfo(BaseModel):
                 tgt_mask = self.make_tgt_mask(tgt_batch)
                 tgt_key_padding_mask = self.make_src_key_padding_mask(tgt_batch)
 
-                embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt_batch))
+                embed_tgt = self.pos_encoder(self.tgt_tok_embed(tgt_batch) * self.embed_scale)
 
                 decoder_output = self.transformer.decoder(
                     embed_tgt,
@@ -241,7 +242,7 @@ class Transfo(BaseModel):
             for src, trg in dataloader:
                 src, trg = src.to(device), trg.to(device)
 
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
 
                 # Forward pass
                 with torch.amp.autocast(enabled=scaler is not None, device_type="cuda"):

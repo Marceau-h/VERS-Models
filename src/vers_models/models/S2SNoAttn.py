@@ -6,7 +6,7 @@ from typing import Union, Optional, List, Iterable
 from numpy import ndarray
 import torch
 from torch import nn, Tensor
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 from tqdm import trange
 
 try:
@@ -79,7 +79,7 @@ class S2SNoAttn(BaseModel):
         trg_vocab_size = self.fc.out_features
 
         # Tensor to store decoder outputs
-        outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(src.device)
+        outputs = torch.zeros(batch_size, trg_len, trg_vocab_size, device=src.device)
 
         # Encode the source sequence
         embedded_src = self.encoder_embedding(src)
@@ -88,8 +88,10 @@ class S2SNoAttn(BaseModel):
         # Concatenate the forward and backward hidden states for each layer
         # Bidirectional encoder returns (num_layers * 2, batch, hidden_size)
         # We need (num_layers, batch, hidden_size * 2) for unidirectional decoder
-        hidden = torch.cat([hidden[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
-        cell = torch.cat([cell[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
+        hidden = hidden.view(self.num_layers, 2, batch_size, self.hidden_size)
+        hidden = torch.cat([hidden[:, 0, :, :], hidden[:, 1, :, :]], dim=2)
+        cell = cell.view(self.num_layers, 2, batch_size, self.hidden_size)
+        cell = torch.cat([cell[:, 0, :, :], cell[:, 1, :, :]], dim=2)
 
         # First input to the decoder is the <sos> token
         input_ = trg[:, 0]
@@ -123,8 +125,10 @@ class S2SNoAttn(BaseModel):
             # Concatenate forward and backward states for each layer
             # Bidirectional encoder returns (num_layers * 2, batch, hidden_size)
             # We need (num_layers, batch, hidden_size * 2) for unidirectional decoder
-            hidden = torch.cat([hidden[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
-            cell = torch.cat([cell[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
+            hidden = hidden.view(self.num_layers, 2, 1, self.hidden_size)
+            hidden = torch.cat([hidden[:, 0, :, :], hidden[:, 1, :, :]], dim=2)
+            cell = cell.view(self.num_layers, 2, 1, self.hidden_size)
+            cell = torch.cat([cell[:, 0, :, :], cell[:, 1, :, :]], dim=2)
 
             # Initialize the decoder input with the <sos> token
             input_ = torch.tensor([lang_output.SOS_ID], device=self.device)
@@ -159,8 +163,10 @@ class S2SNoAttn(BaseModel):
             # Concatenate forward and backward states for each layer
             # Bidirectional encoder returns (num_layers * 2, batch, hidden_size)
             # We need (num_layers, batch, hidden_size * 2) for unidirectional decoder
-            hidden = torch.cat([hidden[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
-            cell = torch.cat([cell[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
+            hidden = hidden.view(self.num_layers, 2, batch_size, self.hidden_size)
+            hidden = torch.cat([hidden[:, 0, :, :], hidden[:, 1, :, :]], dim=2)
+            cell = cell.view(self.num_layers, 2, batch_size, self.hidden_size)
+            cell = torch.cat([cell[:, 0, :, :], cell[:, 1, :, :]], dim=2)
 
             input_tokens = torch.full((batch_size,), lang_output.SOS_ID, device=self.device, dtype=torch.long)
             active_mask = torch.ones(batch_size, dtype=torch.bool, device=self.device)
@@ -220,7 +226,7 @@ class S2SNoAttn(BaseModel):
             for src, trg in dataloader:
                 src, trg = src.to(device), trg.to(device)
 
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
                 if scaler is not None:
                     with torch.amp.autocast("cuda"):
                         output = self(src, trg)
