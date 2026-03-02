@@ -85,9 +85,11 @@ class S2SNoAttn(BaseModel):
         embedded_src = self.encoder_embedding(src)
         encoder_outputs, (hidden, cell) = self.encoder_lstm(embedded_src)
 
-        # Concatenate the forward and backward hidden states
-        hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1).unsqueeze(0)
-        cell = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1).unsqueeze(0)
+        # Concatenate the forward and backward hidden states for each layer
+        # Bidirectional encoder returns (num_layers * 2, batch, hidden_size)
+        # We need (num_layers, batch, hidden_size * 2) for unidirectional decoder
+        hidden = torch.cat([hidden[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
+        cell = torch.cat([cell[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
 
         # First input to the decoder is the <sos> token
         input_ = trg[:, 0]
@@ -118,8 +120,11 @@ class S2SNoAttn(BaseModel):
             if len(hidden.shape) != 3:
                 raise ValueError("Hidden shape is not 3D")
 
-            hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1).unsqueeze(0)
-            cell = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1).unsqueeze(0)
+            # Concatenate forward and backward states for each layer
+            # Bidirectional encoder returns (num_layers * 2, batch, hidden_size)
+            # We need (num_layers, batch, hidden_size * 2) for unidirectional decoder
+            hidden = torch.cat([hidden[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
+            cell = torch.cat([cell[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
 
             # Initialize the decoder input with the <sos> token
             input_ = torch.tensor([lang_output.SOS_ID], device=self.device)
@@ -151,8 +156,11 @@ class S2SNoAttn(BaseModel):
             if len(hidden.shape) != 3:
                 raise ValueError("Hidden shape is not 3D")
 
-            hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1).unsqueeze(0)
-            cell = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1).unsqueeze(0)
+            # Concatenate forward and backward states for each layer
+            # Bidirectional encoder returns (num_layers * 2, batch, hidden_size)
+            # We need (num_layers, batch, hidden_size * 2) for unidirectional decoder
+            hidden = torch.cat([hidden[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
+            cell = torch.cat([cell[2*i:2*i+2, :, :] for i in range(self.num_layers)], dim=2)
 
             input_tokens = torch.full((batch_size,), lang_output.SOS_ID, device=self.device, dtype=torch.long)
             active_mask = torch.ones(batch_size, dtype=torch.bool, device=self.device)
