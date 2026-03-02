@@ -22,6 +22,7 @@ from .models import (
     InvalidConfigError,
     BaseModel,
     S2SNoAttn,
+    S2SMultiHeadAttn,
     Transfo,
 )
 
@@ -29,6 +30,7 @@ __all__ = [
     "InvalidConfigError",
     "BaseModel",
     "S2SNoAttn",
+    "S2SMultiHeadAttn",
     "Transfo",
 
     "Language",
