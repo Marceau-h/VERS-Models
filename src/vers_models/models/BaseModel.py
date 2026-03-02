@@ -721,7 +721,15 @@ class BaseModel(ABC, nn.Module):
         return f"{self.__class__.__name__}({self.params})"
 
     def __hash__(self):
-        return hash((self.__class__.__name__, frozenset(self.params.items())))
+        hashable_items = []
+        for key, value in self.params.items():
+            try:
+                hash(value)
+                hashable_items.append((key, value))
+            except TypeError:
+                hashable_items.append((key, str(type(value))))
+
+        return hash((self.__class__.__name__, frozenset(hashable_items)))
 
     def __eq__(self, other):
         if not isinstance(other, BaseModel):
